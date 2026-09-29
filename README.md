@@ -1,75 +1,41 @@
-# React + TypeScript + Vite
+# 프로젝트 주제
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+1일 1 기술 면접 학습 플랫폼.
 
-Currently, two official plugins are available:
+# 사용자의 문제
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+졸업 예정자, 취업 준비생은 IT 취업을 위해 기술 면접을 준비해야 한다.  
+기술 면접 준비 활동으로 인강, 스터디 모임 등이 있다.  
+스터디 모임은 함께할 사람을 찾아야 하는 문제가 있다.  
+혼자서는 학습한 내용을 다른 사람에게 설명하는 메타인지 활동을 하기 어렵다.  
+이 프로젝트는 혼자서 기술 면접을 준비하는 사람이 가진 문제를 해결한다.  
 
-## React Compiler
+# 솔루션
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+사용자는 실제 기술 면접 처럼 질문을 주관식으로 답변을 하고,  
+사용자의 답변을 LLM으로 분석하여 좋은 점, 아쉬운 점, 개선할 점을 판단하여 사용자에게 제공한다.
 
-## Expanding the ESLint configuration
+'듀오링고'와 같이 사용자의 지속적 참여를 위해 학습할 기술 질문을 작게 쪼개어 짧은 시간에 끝낼 수 있도록 한다.  
+이를 통해 매일 꾸준히 기술 면접을 준비할 수 있도록 한다.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# 시작 준비
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| 항목 | 비고 |
+| --- | --- |
+| Node.js 24+ | `node -v`으로 확인 |
+| npm | `npm -v`으로 확인 |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+# 시작하기
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# 프로젝트 루트에서
+cp .env.example .env
 
+# .env 항목 작성
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+```bash
+npm install
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+npm run dev
 ```
