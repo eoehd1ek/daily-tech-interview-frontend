@@ -56,10 +56,12 @@
 
 예상 파일: 기존 `eslint.config.js`만 필요한 범위에서 수정.
 
-- [ ] `npm run lint`가 `.kilo/worktrees/alder-rhinoceros`까지 검사하며 `No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present`로 실패하는 현상을 확인한다.
-- [ ] 현재 레포 검사에서 관리용 worktree를 제외하고, 필요 시 설치된 typescript-eslint 방식에 맞게 설정 파일 위치 기준의 `tsconfigRootDir`를 명시한다. 규칙 비활성화나 worktree 파일 변경으로 우회하지 않는다.
+- [x] `npm run lint`가 `.kilo/worktrees/alder-rhinoceros`까지 검사하며 `No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present`로 실패하는 현상을 확인한다.
+- [x] 현재 레포 검사에서 관리용 worktree를 제외하고, 필요 시 설치된 typescript-eslint 방식에 맞게 설정 파일 위치 기준의 `tsconfigRootDir`를 명시한다. 규칙 비활성화나 worktree 파일 변경으로 우회하지 않는다.
 
-완료 기준: 현재 레포의 `npm run lint`와 `npm run build`가 통과한다. 이번 문서 작성 시 빌드는 통과했으나 lint는 위 원인으로 실패했으며, 이 설정 수정은 아직 수행하지 않았다.
+완료 기준: 현재 레포의 `npm run lint`와 `npm run build`가 통과한다.
+
+완료 결과: `eslint.config.js`의 `globalIgnores`에 `.kilo/worktrees/**`를 추가한 것만으로 lint와 빌드가 모두 통과했다. `tsconfigRootDir` 추가는 필요하지 않았다. 현재 앱 소스의 TypeScript/React Hooks/React Refresh 규칙이 유지되고 프론트 설정에서 관리용 worktree가 제외되는 것도 확인했다. worktree 내부 파일, React 코드, dependency는 변경하지 않았다.
 
 ### 1. API 통신 기반과 계약 타입
 
