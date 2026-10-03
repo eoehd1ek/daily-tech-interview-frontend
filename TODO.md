@@ -90,18 +90,26 @@ CORS 확인 범위: `.env`의 API 주소는 `http://localhost:8080`이며, 검�
 
 목적: URL과 화면의 대응을 먼저 확정해 이후 기능을 페이지 단위로 추가한다.
 
-예상 파일: 기존 `src/main.tsx`, `src/App.tsx`, 필요 범위의 `src/index.css`/`src/App.css`; 신규 `src/pages/HomePage.tsx`, `QuestionAnswerPage.tsx`, `EvaluationResultPage.tsx`.
+변경 파일: 기존 `src/main.tsx`, `src/App.tsx`, `index.html`; 신규 `src/pages/HomePage.tsx`, `QuestionAnswerPage.tsx`, `EvaluationResultPage.tsx`. 사용자 요청에 따라 Vite 예제 CSS와 기본 에셋도 제거한다.
 
-- [ ] 기존 `react-router` 패키지의 `BrowserRouter`, `Routes`, `Route`, `Link`, `useNavigate`, `useParams`를 사용한다. 설치 버전의 export와 타입을 확인하며 다른 버전의 예제를 무작정 복사하지 않는다.
-- [ ] `/`는 메인, `/questions/:questionId`는 질문/답변, `/results/:attemptId`는 결과 페이지로 연결한다. 아직 각 페이지는 제목 수준의 틀만 만든다.
-- [ ] 알 수 없는 화면 경로에는 페이지 없음 안내와 메인 이동 링크를 제공한다. 프론트 URL과 `/api/...` API URL을 혼동하지 않는다.
-- [ ] MUI `CssBaseline`, `Container`, `Box` 또는 `Stack`을 활용해 기본 여백과 읽기 가능한 너비를 만든다. 별도 테마/디자인 시스템은 구축하지 않는다.
-- [ ] 예제 화면을 대체하고 그 화면에서 쓰던 CSS/import만 정리한다. 예제 CSS가 입력창 정렬이나 모바일 너비를 방해하지 않게 하며 무관한 asset/설정 정리는 하지 않는다.
-- [ ] `StrictMode`를 유지한다. API 호출을 컴포넌트 본문에서 수행하지 않는다.
+- [x] 기존 `react-router` 패키지의 `BrowserRouter`, `Routes`, `Route`, `Link`, `useParams`를 사용한다. 설치 버전의 export와 타입을 확인하며 다른 버전의 예제를 무작정 복사하지 않는다. `useNavigate`는 제출 성공 이동이 필요한 6단계에서 추가한다.
+- [x] `/`는 메인, `/questions/:questionId`는 질문/답변, `/results/:attemptId`는 결과 페이지로 연결한다. 아직 각 페이지는 제목 수준의 틀만 만든다.
+- [x] 알 수 없는 화면 경로에는 페이지 없음 안내와 메인 이동 링크를 제공한다. 프론트 URL과 `/api/...` API URL을 혼동하지 않는다.
+- [x] MUI `CssBaseline`, `Container`, `Box` 또는 `Stack`을 활용해 기본 여백과 읽기 가능한 너비를 만든다. 별도 테마/디자인 시스템은 구축하지 않는다.
+- [x] 예제 화면을 대체하고 관련 CSS/import 및 기본 에셋을 제거한다. `App.css`, `index.css`, `src/assets`의 React/Vite 로고와 hero 이미지, `public`의 icons/favicon을 삭제하고 `index.html`의 favicon 참조도 제거한다. 무관한 파일은 정리하지 않는다.
+- [x] `StrictMode`를 유지한다. API 호출을 컴포넌트 본문에서 수행하지 않는다.
 
 선택 이유: 라우터는 백엔드 Controller와 달리 브라우저 URL에 맞는 컴포넌트를 고른다. `Link`/`useNavigate`는 전체 페이지를 재로딩하지 않고 화면을 바꾼다. URL의 ID는 페이지를 새로 열어도 API로 데이터를 조회할 수 있게 한다.
 
 완료 기준: 세 경로와 알 수 없는 경로가 표시되고 메인으로 이동할 수 있다. 화면 너비가 모바일에서 넘치지 않으며 빌드/lint를 통과한다.
+
+완료 결과: `main.tsx`에서 `BrowserRouter`를 연결하고 `App.tsx`에 공통 header/main 및 세 경로와 `*` 안내를 구성했다. 페이지는 각각 `h1` 하나와 준비 안내만 표시하며 질문/평가 ID는 URL에서 읽는다. ID 검증, API 조회, 답변 입력, 제출은 후속 단계에 남긴다. 공통 메인 링크는 MUI `Link`와 Router `Link`를 연결해 전체 재로딩 없이 이동한다.
+
+스타일 규칙: MUI 기본 라이트 스타일과 기본 폰트를 사용한다. `CssBaseline`으로 기본 스타일을 정리하고 `Container maxWidth="lg"`, `Stack spacing`, 최소 `sx`로 반응형 여백/헤더 배치/긴 문자열 줄바꿈을 처리한다. 별도 CSS 파일, 외부 폰트, 커스텀 테마, 새 dependency는 추가하지 않았다. `index.html`은 한국어 `lang="ko"`와 `기술 면접 연습` 제목을 사용한다.
+
+검증 결과: `npm run lint`, `npm run build`를 통과했다. 기존 Edge의 headless 모드와 외부 임시 스크립트로 375px/1280px에서 네 경로의 직접 접근/새로고침, 메인 링크의 SPA 이동, 뒤로 가기, 페이지별 단일 h1, 모바일 가로 넘침 없음, 긴 ID 줄바꿈, MUI 스타일 적용, API 요청 및 런타임 예외 없음을 확인했다. 첫 검증은 Vite 초기 dependency 최적화에 따른 재로딩으로 중단됐으며 재실행에서 8개 경로/너비 조합 모두 통과했다. 예제 에셋/CSS 참조가 남지 않았고 빌드 결과에도 기본 에셋이 없다.
+
+배포 전제: Cloudflare Pages에서 `npm run build`의 `dist`를 배포하고 최상위 `404.html`을 추가하지 않아 기본 SPA fallback을 사용한다. 별도 `_redirects`나 Pages Function은 추가하지 않는다. API는 별도 HTTPS 백엔드의 Origin을 빌드 환경변수 `VITE_API_BASE_URL`에 설정한다. 이번 검증은 로컬 Vite 환경이며 Cloudflare 배포의 직접 URL 접근과 API/CORS는 7단계에서 실제 확인한다.
 
 ### 3. 메인 소개와 질문 목록 조회
 
