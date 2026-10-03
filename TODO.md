@@ -69,16 +69,22 @@
 
 예상 파일: 신규 `src/api/client.ts`, `src/api/types.ts`. 필요한 경우에만 기존 `.env.example`의 안내를 보완한다.
 
-- [ ] 질문 목록/상세, 제출 요청, 평가 결과, `{ code: string, message: string }` 오류 타입을 계약 그대로 정의한다. POST/결과 GET에 같은 평가 결과 타입을 사용한다.
-- [ ] axios 인스턴스 하나에 `import.meta.env.VITE_API_BASE_URL`을 `baseURL`로 설정한다. `.env.example`의 값은 서버 주소이며 각 요청 경로에 `/api`를 포함한다. `/api/api`가 되지 않도록 주소 규칙을 통일한다.
-- [ ] 환경변수 누락/잘못된 주소는 명확히 알리고 임의의 운영 주소로 대체하지 않는다. 환경변수 변경 후 개발 서버를 재시작해야 함을 확인한다.
-- [ ] 질문 조회 요청은 취소용 `signal`을 받을 수 있게 한다. 공통 재시도 interceptor, 인증 토큰, `withCredentials`는 추가하지 않는다.
-- [ ] axios 오류는 `axios.isAxiosError`로 확인하고 HTTP 상태와 `code`로 구분한다. 네트워크 오류 등 응답 본문이 없거나 형식이 다른 경우에는 기본 사용자 안내를 사용한다. 반복되는 작은 오류 처리만 필요할 때 공유하고 범용 오류 framework는 만들지 않는다.
-- [ ] 실제 프론트 Origin과 백엔드 주소를 확인한다. 다른 Origin으로 직접 호출하는 현재 방식에는 백엔드 CORS 허용이 필요하며, 허용 설정은 백엔드 협의 사항으로 남긴다.
+- [x] 질문 목록/상세, 제출 요청, 평가 결과, `{ code: string, message: string }` 오류 타입을 계약 그대로 정의한다. POST/결과 GET에 같은 평가 결과 타입을 사용한다.
+- [x] axios 인스턴스 하나에 `import.meta.env.VITE_API_BASE_URL`을 `baseURL`로 설정한다. `.env.example`의 값은 서버 주소이며 각 요청 경로에 `/api`를 포함한다. `/api/api`가 되지 않도록 주소 규칙을 통일한다.
+- [x] 환경변수 누락/잘못된 주소는 명확히 알리고 임의의 운영 주소로 대체하지 않는다. 환경변수 변경 후 개발 서버를 재시작해야 함을 확인한다.
+- [x] 질문 조회 요청은 취소용 `signal`을 받을 수 있게 한다. 공통 재시도 interceptor, 인증 토큰, `withCredentials`는 추가하지 않는다.
+- [x] axios 오류는 `axios.isAxiosError`로 확인하고 HTTP 상태와 `code`로 구분한다. 네트워크 오류 등 응답 본문이 없거나 형식이 다른 경우에는 기본 사용자 안내를 사용한다. 반복되는 작은 오류 처리만 필요할 때 공유하고 범용 오류 framework는 만들지 않는다.
+- [x] 실제 프론트 Origin과 백엔드 주소를 확인한다. 다른 Origin으로 직접 호출하는 현재 방식에는 백엔드 CORS 허용이 필요하며, 허용 설정은 백엔드 협의 사항으로 남긴다.
 
 설정 이유: `VITE_` 환경변수는 브라우저 번들에 공개된다. 서버 주소만 두고 API 키, OpenRouter 키 등 비밀을 넣지 않는다. TypeScript 타입은 컴파일 시 도움일 뿐 실제 서버 JSON을 자동 검증하지는 않는다. 별도 스키마 라이브러리를 추가하지 않는다.
 
 완료 기준: 계약의 네 API에 필요한 타입이 준비되고 `npm run build`, `npm run lint`를 통과한다. 개발 서버에서 통신 주소가 기대한 `/api/...`로 조합됨을 확인한다. 아직 화면 기능은 구현하지 않는다.
+
+완료 결과: `src/api/types.ts`에 계약 타입을, `src/api/client.ts`에 `apiClient`와 `getApiError`를 추가했다. 서버 주소는 `/api` 없는 HTTP/HTTPS Origin으로 제한하고 누락, 경로, 인증 정보, query/fragment를 포함한 설정은 명확히 거부한다. `.env.example`에 주소 규칙, 재시작, 공개 환경변수 주의사항을 기록했다. 화면 연결, API별 요청 함수, 평가 timeout 수치는 후속 단계에서 구현한다.
+
+검증 결과: lint와 빌드를 통과했다. 기존 Vite/axios 및 외부 임시 검증 스크립트로 12개 환경에서 네 API 주소 조합, 잘못된 설정, HTTP 상태/코드 오류, 비정상 본문, 네트워크/timeout 오류, GET `signal` 취소, 자동 재시도 없음을 확인했다. 오류/GET 검증은 axios adapter와 구성한 오류 객체를 사용했으며 실제 백엔드 연동 검증은 아니다. GET `signal`은 클라이언트에서 사용 가능하며 질문별 요청 함수의 인자 연결은 3~4단계에서 수행한다. 기존 React 화면은 수정하지 않았고 평가 POST도 보내지 않았다.
+
+CORS 확인 범위: `.env`의 API 주소는 `http://localhost:8080`이며, 검증용 Vite 서버의 `http://127.0.0.1:<임시 포트>`와 다른 Origin이었다. 기존 Vite 설정은 개발 서버 Origin을 고정하지 않으므로 실제 개발 실행 시 출력 주소를 확인해야 한다. 확인 시점의 백엔드 `src/main`에는 공개 API Controller/CORS 설정이 없었다. 백엔드 CORS 허용과 배포 Origin 확정은 아직 미검증 협의 사항이며, 7단계의 실제 연동 검증에 남긴다.
 
 ### 2. 세 페이지의 라우팅과 MUI 기본 틀
 
