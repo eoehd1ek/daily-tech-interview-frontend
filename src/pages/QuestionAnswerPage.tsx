@@ -5,7 +5,7 @@ import { Alert, Button, CircularProgress, Stack, TextField, Typography } from '@
 import { useNavigate, useParams } from 'react-router'
 import { getApiError } from '../api/client'
 import { getQuestion } from '../api/questions'
-import { submitEvaluationAttempt } from '../api/evaluationAttempts'
+import { getEvaluationWaitTime, submitEvaluationAttempt } from '../api/evaluationAttempts'
 import type { ApiError, QuestionDetail } from '../api/types'
 
 const MAX_ANSWER_LENGTH = 3000
@@ -39,11 +39,16 @@ function QuestionAnswerContent({ questionId }: { questionId: number }) {
   const [hasBlurred, setHasBlurred] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submissionError, setSubmissionError] = useState<string | null>(null)
-  const submissionController = useRef<AbortController | null>(null)
+  const currentSubmission = useRef<{ timer: number } | null>(null)
   const isAnswerEmpty = hasBlurred && answer.trim().length === 0
   const isAnswerTooLong = answer.length > MAX_ANSWER_LENGTH
 
-  useEffect(() => () => submissionController.current?.abort(), [])
+  useEffect(() => () => {
+    if (currentSubmission.current) {
+      window.clearTimeout(currentSubmission.current.timer)
+      currentSubmission.current = null
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -74,19 +79,34 @@ function QuestionAnswerContent({ questionId }: { questionId: number }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (submissionController.current || !state.question) return
+    if (currentSubmission.current || !state.question) return
     setHasBlurred(true)
     setSubmissionError(null)
     if (!answer.trim() || isAnswerTooLong) return
 
-    const controller = new AbortController()
-    submissionController.current = controller
+    let waitTime: number
+    try {
+      waitTime = getEvaluationWaitTime()
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : getApiError(error).message)
+      return
+    }
+
+    // Expiring the UI wait invalidates this submission without canceling its POST.
+    const submission = { timer: 0 }
+    currentSubmission.current = submission
+    submission.timer = window.setTimeout(() => {
+      if (currentSubmission.current !== submission) return
+      currentSubmission.current = null
+      setIsSubmitting(false)
+      setSubmissionError('서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요. 이전 요청은 계속 처리될 수 있으며 다시 제출하면 별도 평가가 생성될 수 있습니다.')
+    }, waitTime)
     setIsSubmitting(true)
     try {
-      const evaluation = await submitEvaluationAttempt(questionId, { answer }, controller.signal)
-      if (!controller.signal.aborted) navigate(`/results/${evaluation.id}`)
+      const evaluation = await submitEvaluationAttempt(questionId, { answer })
+      if (currentSubmission.current === submission) navigate(`/results/${evaluation.id}`)
     } catch (error) {
-      if (controller.signal.aborted) return
+      if (currentSubmission.current !== submission) return
       const apiError = getApiError(error)
       if (axios.isAxiosError(error) && !error.response) {
         setSubmissionError('평가 응답을 받지 못했습니다. 서버에서 평가와 저장이 완료됐을 수 있습니다. 자동 재전송하지 않으며, 다시 제출하면 별도의 평가가 생성될 수 있습니다.')
@@ -104,8 +124,9 @@ function QuestionAnswerContent({ questionId }: { questionId: number }) {
         }
       }
     } finally {
-      if (!controller.signal.aborted) {
-        submissionController.current = null
+      if (currentSubmission.current === submission) {
+        window.clearTimeout(submission.timer)
+        currentSubmission.current = null
         setIsSubmitting(false)
       }
     }
