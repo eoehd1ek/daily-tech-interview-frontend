@@ -48,7 +48,7 @@ function AdminQuestionListPage() {
       <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
         <Typography component="h1" variant="h4">질문 관리</Typography>
         <Typography color="text.secondary">
-          수정할 질문을 선택하거나 새 질문 작성을 시작하세요. 생성·수정 화면은 준비 중입니다.
+          수정할 질문을 선택하거나 새 질문 작성을 시작하세요.
         </Typography>
         <Typography variant="body2" color="text.secondary">
           현재 관리자 기능에는 로그인·권한 확인이 없습니다. 로컬 또는 접근이 제한된 환경에서 사용하세요.

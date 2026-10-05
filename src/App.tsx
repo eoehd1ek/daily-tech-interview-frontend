@@ -4,16 +4,7 @@ import HomePage from './pages/HomePage'
 import QuestionAnswerPage from './pages/QuestionAnswerPage'
 import EvaluationResultPage from './pages/EvaluationResultPage'
 import AdminQuestionListPage from './pages/AdminQuestionListPage'
-
-function QuestionEditorPlaceholder({ isNew }: { isNew: boolean }) {
-  return (
-    <Stack spacing={2}>
-      <Typography component="h1" variant="h4">{isNew ? '새 질문 만들기' : '질문 수정'}</Typography>
-      <Typography color="text.secondary">질문 생성·수정 화면은 준비 중입니다.</Typography>
-      <Link component={RouterLink} to="/admin/questions">관리자 질문 목록으로</Link>
-    </Stack>
-  )
-}
+import AdminQuestionEditorPage from './pages/AdminQuestionEditorPage'
 
 function App() {
   return (
@@ -42,8 +33,8 @@ function App() {
                 <Route path="/questions/:questionId" element={<QuestionAnswerPage />} />
                 <Route path="/results/:attemptId" element={<EvaluationResultPage />} />
                 <Route path="/admin/questions" element={<AdminQuestionListPage />} />
-                <Route path="/admin/questions/new" element={<QuestionEditorPlaceholder isNew />} />
-                <Route path="/admin/questions/:questionId/edit" element={<QuestionEditorPlaceholder isNew={false} />} />
+                <Route path="/admin/questions/new" element={<AdminQuestionEditorPage isNew />} />
+                <Route path="/admin/questions/:questionId/edit" element={<AdminQuestionEditorPage isNew={false} />} />
                 <Route
                   path="*"
                   element={

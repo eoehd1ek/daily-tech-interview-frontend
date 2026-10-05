@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { MemoryRouter } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { expect, it, vi } from 'vitest'
 import App from '../App'
 import { apiClient } from '../api/client'
@@ -10,9 +10,11 @@ import { server } from '../test/server'
 
 const endpoint = 'http://api.test/api/admin/questions'
 const questions = [{ id: 9, title: '인덱스' }, { id: 2, title: 'Java GC' }]
+const detail = { id: 9, title: '인덱스', content: '인덱스를 설명해주세요.', criteria: [{ id: 91, content: '조회 이점', maxScore: 100, displayOrder: 1 }] }
 
 function renderAdmin(path = '/admin/questions') {
-  return render(<StrictMode><MemoryRouter initialEntries={[path]}><App /></MemoryRouter></StrictMode>)
+  const router = createMemoryRouter([{ path: '*', element: <App /> }], { initialEntries: [path] })
+  return render(<StrictMode><RouterProvider router={router} /></StrictMode>)
 }
 
 it('shows loading and the new question link before the list arrives', async () => {
@@ -32,7 +34,10 @@ it('shows loading and the new question link before the list arrives', async () =
 
 it('uses only the admin list API and preserves response order with keyboard edit navigation', async () => {
   const get = vi.spyOn(apiClient, 'get')
-  server.use(http.get(endpoint, () => HttpResponse.json(questions)))
+  server.use(
+    http.get(endpoint, () => HttpResponse.json(questions)),
+    http.get(`${endpoint}/9`, () => HttpResponse.json(detail)),
+  )
   renderAdmin()
   const list = await screen.findByRole('list', { name: '관리자 질문 목록' })
   const links = within(list).getAllByRole('link')
@@ -50,12 +55,14 @@ it('uses only the admin list API and preserves response order with keyboard edit
   const before = get.mock.calls.length
   await user.keyboard('{Enter}')
   expect(await screen.findByRole('heading', { name: '질문 수정', level: 1 })).toBeInTheDocument()
-  expect(screen.getByText('질문 생성·수정 화면은 준비 중입니다.')).toBeInTheDocument()
-  expect(get).toHaveBeenCalledTimes(before)
+  expect(await screen.findByRole('textbox', { name: '질문 제목' })).toHaveValue(detail.title)
+  expect(screen.getByRole('textbox', { name: '질문 본문' })).toHaveValue(detail.content)
+  expect(get.mock.calls.slice(before).every(([path, config]) => path === '/api/admin/questions/9' && config?.signal)).toBe(true)
+  expect(get.mock.calls.length).toBeGreaterThan(before)
   expect(screen.getByRole('link', { name: '관리자 질문 목록으로' })).toHaveAttribute('href', '/admin/questions')
 })
 
-it('shows an empty state and allows navigation to new question preparation and back', async () => {
+it('shows an empty state and allows navigation to a blank new editor and back', async () => {
   const received = vi.fn()
   server.use(http.get(endpoint, () => { received(); return HttpResponse.json([]) }))
   renderAdmin()
@@ -66,6 +73,8 @@ it('shows an empty state and allows navigation to new question preparation and b
   const before = received.mock.calls.length
   await user.click(screen.getByRole('link', { name: '새 질문 만들기' }))
   expect(await screen.findByRole('heading', { name: '새 질문 만들기', level: 1 })).toBeInTheDocument()
+  expect(screen.getByRole('textbox', { name: '질문 제목' })).toHaveValue('')
+  expect(screen.getByRole('textbox', { name: '기준 설명 1' })).toHaveValue('')
   expect(received).toHaveBeenCalledTimes(before)
   await user.click(screen.getByRole('link', { name: '관리자 질문 목록으로' }))
   expect(await screen.findByText('아직 등록된 질문이 없습니다.')).toBeInTheDocument()
@@ -119,7 +128,9 @@ it.each(['success', 'error'])('cancels pending GET on leaving and ignores late %
     expect(signals.some((signal) => signal && !signal.aborted)).toBe(true)
     await userEvent.setup().click(screen.getByRole('link', { name: '새 질문 만들기' }))
     expect(await screen.findByRole('heading', { name: '새 질문 만들기', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '질문 제목' })).toHaveValue('')
     expect(signals.every((signal) => signal?.aborted)).toBe(true)
+    expect(get.mock.calls.every(([path]) => path === '/api/admin/questions')).toBe(true)
     await act(async () => {
       release()
       await Promise.allSettled(get.mock.results.map((result) => result.value))
@@ -143,17 +154,30 @@ it('links from the user home to admin management without replacing the public li
   expect(await screen.findByRole('list', { name: '질문 목록' })).toBeInTheDocument()
 })
 
-it.each([
-  ['/admin/questions/new', '새 질문 만들기'],
-  ['/admin/questions/9/edit', '질문 수정'],
-])('opens preparation route %s directly without any API calls', (path, title) => {
+it('opens the new editor directly without any API calls', () => {
   const get = vi.spyOn(apiClient, 'get')
   const post = vi.spyOn(apiClient, 'post')
   const put = vi.spyOn(apiClient, 'put')
-  renderAdmin(path)
-  expect(screen.getByRole('heading', { name: title, level: 1 })).toBeInTheDocument()
+  renderAdmin('/admin/questions/new')
+  expect(screen.getByRole('heading', { name: '새 질문 만들기', level: 1 })).toBeInTheDocument()
+  expect(screen.getByRole('textbox', { name: '질문 제목' })).toHaveValue('')
   expect(screen.getByRole('link', { name: '관리자 질문 목록으로' })).toHaveAttribute('href', '/admin/questions')
   expect(get).not.toHaveBeenCalled()
+  expect(post).not.toHaveBeenCalled()
+  expect(put).not.toHaveBeenCalled()
+})
+
+it('opens the edit route directly with only an abortable admin detail GET', async () => {
+  const get = vi.spyOn(apiClient, 'get')
+  const post = vi.spyOn(apiClient, 'post')
+  const put = vi.spyOn(apiClient, 'put')
+  server.use(http.get(`${endpoint}/9`, () => HttpResponse.json(detail)))
+  renderAdmin('/admin/questions/9/edit')
+  expect(await screen.findByRole('textbox', { name: '질문 제목' })).toHaveValue(detail.title)
+  expect(screen.getByRole('heading', { name: '질문 수정', level: 1 })).toBeInTheDocument()
+  expect(screen.getByRole('textbox', { name: '기준 설명 1' })).toHaveValue('조회 이점')
+  expect(get.mock.calls.length).toBeGreaterThan(0)
+  expect(get.mock.calls.every(([path, config]) => path === '/api/admin/questions/9' && config?.signal)).toBe(true)
   expect(post).not.toHaveBeenCalled()
   expect(put).not.toHaveBeenCalled()
 })

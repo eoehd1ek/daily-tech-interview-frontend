@@ -9,6 +9,41 @@ export interface QuestionDetail {
   content: string
 }
 
+export interface AdminCriterionRequest {
+  content: string
+  maxScore: number
+  displayOrder: number
+}
+
+export interface AdminCriterionDetail extends AdminCriterionRequest {
+  id: number
+}
+
+export interface AdminQuestionRequest {
+  title: string
+  content: string
+  criteria: AdminCriterionRequest[]
+}
+
+export interface AdminQuestionDetail extends AdminQuestionRequest {
+  id: number
+  criteria: AdminCriterionDetail[]
+}
+
+export interface EvaluationPreviewRequest extends AdminQuestionRequest {
+  answer: string
+}
+
+export interface EvaluationPreviewResult {
+  questionTitle: string
+  answer: string
+  score: number
+  result: 'PASS' | 'RETRY' | 'FAIL'
+  strengths: string
+  weaknesses: string
+  improvements: string
+}
+
 export interface EvaluationAttemptRequest {
   answer: string
 }
