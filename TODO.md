@@ -263,3 +263,15 @@ CORS 확인 범위: `.env`의 API 주소는 `http://localhost:8080`이며, 검�
 라이브러리 선택: Vitest는 현재 Vite 설정/TypeScript와 연결되는 실행 및 assertion 도구다. React Testing Library는 사용자에게 보이는 role/label로 화면을 검사하고, DOM peer는 요소 조회/waitFor를 제공한다. user-event는 입력/클릭 등 사용자 이벤트를 재현한다. jest-dom은 `toHaveValue`, `toBeDisabled` 등의 화면 assertion을 추가하며 별도 Jest runner는 필요 없다. jsdom은 Node에서 DOM을 제공하지만 실제 레이아웃/브라우저 CORS는 검증하지 않는다. MSW는 HTTP 계층을 가로채 앱 요청 코드를 유지하면서 계약 응답만 대체한다.
 
 호환성과 한계: MSW 3의 설정 API/axios XMLHttpRequest 조합으로 초기 검증이 실패해 새 테스트 dependency를 XMLHttpRequest를 가로채는 MSW 2.15.0으로 선택했다. MSW의 합성 XHR은 실제 timeout 시계를 모델링하지 않으므로 timeout 화면 복구 테스트만 axios의 `ECONNABORTED`를 test spy로 주입하며, 180000ms 설정 자체는 별도 API 테스트로 확인한다. 실제 timeout 경계, 모바일 배치, 배포 URL 새로고침, 실제 API/CORS/LLM 성공은 브라우저/통합 검증으로 별도 수행해야 한다. 이번 테스트 도입은 7단계 실제 연동 완료를 의미하지 않는다.
+
+### 조회 화면 회귀 테스트 보강
+
+- [x] `HomePage.test.tsx`: 소개/로딩/정상 목록/응답 순서/빈 목록, 키보드 질문 선택과 상세 URL 이동, 500/네트워크 오류 및 수동 재조회, 이탈 후 조회 취소와 늦은 오류 비표시를 검증한다.
+- [x] `QuestionAnswerPage.query.test.tsx`: 잘못된 ID의 GET 차단/안전 정수 상한, 상세 로딩/제목/본문/label, 400/404/500/네트워크 오류와 재조회, 원문 입력 중 GET 없음, 질문 변경 시 초안/공백 안내 초기화, 3,000자 붙여넣기 제한과 카운터, 이전 조회 취소/늦은 응답 무시를 검증한다. 기존 제출 테스트는 수정하지 않는다.
+- [x] `EvaluationResultPage.test.tsx`: POST state 없는 결과 URL 진입, 총점/세 판정/피드백/답변 원문, 서버 판정 유지, HTML 문자열의 일반 텍스트 처리, 잘못된 ID와 안전 정수 상한, 로딩/400/404/500/네트워크 오류 및 GET만 사용하는 재조회, ID 변경 시 기존 결과 초기화와 이전 조회 취소/늦은 응답 무시를 검증한다.
+
+보강 결과: 기존 43개에 조회 테스트 41개를 추가해 총 6개 파일/84개 테스트를 구성했다. 모든 HTTP 응답은 테스트 전용 MSW handler로 처리하고 미등록 요청 차단을 유지한다. 조회 경합은 명시적 Promise gate로 응답을 보류/완료하며 임의 sleep은 사용하지 않는다. 초기 취소 assertion 3개는 MSW 합성 `Request.signal`이 원래 axios 취소 신호를 반영하지 않아 실패했다. HTTP 응답은 계속 MSW로 처리하고, 원래 axios GET을 그대로 실행하는 spy로 실제 전달 `AbortSignal`을 관찰하도록 테스트만 수정했다. 운영 코드, 기존 테스트, dependency, 백엔드는 수정하지 않았다.
+
+검증 결과: `npm run test:run`에서 6개 파일/84개 테스트, `npm run lint`, `npm run build`, `git diff --check`가 모두 통과했다. 프로덕션 번들은 기존과 동일하며 약 553kB 크기 경고는 유지된다.
+
+검증 범위: user-event의 붙여넣기/추가 입력과 DOM `maxLength`/카운터는 검증하지만 실제 브라우저 입력이나 레이아웃 검증을 대신하지 않는다. MemoryRouter의 결과 URL 시작은 URL ID로 독립 조회하는 구조의 검증이며 실제 브라우저 새로고침/Cloudflare SPA fallback 검증은 아니다. 실제 API/CORS/LLM 요청이나 DB 변경은 수행하지 않았고 7단계 실제 연동 완료 표시도 하지 않는다.
