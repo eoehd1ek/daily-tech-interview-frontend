@@ -3,6 +3,17 @@ import { Link as RouterLink, Route, Routes } from 'react-router'
 import HomePage from './pages/HomePage'
 import QuestionAnswerPage from './pages/QuestionAnswerPage'
 import EvaluationResultPage from './pages/EvaluationResultPage'
+import AdminQuestionListPage from './pages/AdminQuestionListPage'
+
+function QuestionEditorPlaceholder({ isNew }: { isNew: boolean }) {
+  return (
+    <Stack spacing={2}>
+      <Typography component="h1" variant="h4">{isNew ? '새 질문 만들기' : '질문 수정'}</Typography>
+      <Typography color="text.secondary">질문 생성·수정 화면은 준비 중입니다.</Typography>
+      <Link component={RouterLink} to="/admin/questions">관리자 질문 목록으로</Link>
+    </Stack>
+  )
+}
 
 function App() {
   return (
@@ -20,15 +31,19 @@ function App() {
               <Typography variant="h6" component="p">
                 기술 면접 연습
               </Typography>
-              <Link component={RouterLink} to="/">
-                메인으로
-              </Link>
+              <Stack component="nav" aria-label="주요 메뉴" direction="row" spacing={2}>
+                <Link component={RouterLink} to="/">메인으로</Link>
+                <Link component={RouterLink} to="/admin/questions">질문 관리</Link>
+              </Stack>
             </Stack>
             <Box component="main" sx={{ overflowWrap: 'anywhere' }}>
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/questions/:questionId" element={<QuestionAnswerPage />} />
                 <Route path="/results/:attemptId" element={<EvaluationResultPage />} />
+                <Route path="/admin/questions" element={<AdminQuestionListPage />} />
+                <Route path="/admin/questions/new" element={<QuestionEditorPlaceholder isNew />} />
+                <Route path="/admin/questions/:questionId/edit" element={<QuestionEditorPlaceholder isNew={false} />} />
                 <Route
                   path="*"
                   element={
