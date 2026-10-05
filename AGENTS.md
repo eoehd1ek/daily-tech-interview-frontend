@@ -111,6 +111,40 @@ LLM이 사전에 정의된 평가 기준을 바탕으로 답변을 분석한다.
 - 불필요한 global state를 만들지 않는다.
 - mock data를 사용하는 경우 실제 API 데이터와 명확하게 구분한다.
 
+# Frontend Testing
+
+## 도구와 위치
+
+- 테스트 도구는 기존 Vitest, React Testing Library, user-event, jest-dom, jsdom, MSW를 사용한다. 새로운 테스트 도구를 임의로 추가하지 않는다.
+- Vitest는 테스트 실행/assertion/spy, Testing Library는 화면 요소 조회, user-event는 사용자 조작, jest-dom은 DOM assertion을 담당한다.
+- jsdom은 Node의 DOM 실행 환경이며, MSW는 테스트용 HTTP 요청 가로채기와 응답 대체를 담당한다.
+- 테스트 파일은 대상 코드 가까이에 `*.test.ts` 또는 `*.test.tsx`로 작성한다.
+- 공통 설정은 `vitest.config.ts`, HTTP mock 서버와 정리는 `src/test/server.ts`, `src/test/setup.ts`를 사용한다.
+- `npm run test:run`은 전체 테스트를 한 번 실행한다. 특정 파일은 `npm run test:run -- src/pages/QuestionAnswerPage.test.tsx`처럼 실행한다.
+
+## 검증 원칙
+
+- 컴포넌트 내부 상태나 MUI CSS 클래스보다 사용자에게 보이는 role, label, 텍스트, 입력값, 버튼 활성화 상태를 기준으로 검증한다.
+- 정상 사용자 조작은 user-event를 우선 사용한다. 즉시 중복 제출 같은 경계 조건은 필요한 경우에만 fireEvent로 재현한다.
+- 핵심 검증은 API 계약에 맞는 요청/표시, 입력 검증, 분석 대기, 중복 제출 방지, 오류 후 답변 보존, 성공 이동, 취소/오래된 응답 무시다.
+- 비동기 화면은 `findByRole`, `waitFor` 등으로 기다린다. 임의의 sleep이나 실제 180초 대기로 테스트를 느리게 만들지 않는다.
+- 실패하거나 변경되는 핵심 동작에는 회귀 테스트를 추가한다. 테스트만을 위한 대규모 리팩터링, 과도한 snapshot, 불필요한 coverage 목표는 도입하지 않는다.
+
+## HTTP Mock과 격리
+
+- 기본 자동 테스트는 실제 백엔드/LLM을 호출하지 않는다. API 응답은 백엔드 `docs/API.md` 계약에 맞춰 MSW handler로 명시한다.
+- 테스트 API Origin은 `http://api.test`다. 실제 `.env`, 실행 중인 서버, API 키에 의존하지 않는다.
+- 미등록 HTTP 요청은 공통 setup에서 차단하고 테스트를 실패시킨다. 경고/bypass로 완화하거나 앱이 오류를 잡았다는 이유로 통과시키지 않는다.
+- mock은 테스트에서만 사용한다. 운영 앱에 MSW 초기화, 가짜 성공 응답 또는 오류 시 mock 데이터 대체를 넣지 않는다.
+- 각 테스트 뒤 화면, MSW handler, spy, 환경변수, 타이머를 정리하고 테스트 실행 순서에 의존하지 않는다.
+- timeout 복구는 MSW 합성 XHR의 타이머 한계를 고려해 axios timeout 오류를 테스트에서 주입할 수 있다. 이 경우 실제 시간 제한을 검증한 것으로 표현하지 않고 timeout 설정값 검증과 구분한다.
+
+## 검증 범위
+
+- mock 테스트 성공은 실제 API/CORS/LLM 연동 성공을 의미하지 않는다. 실제 연동 검증은 별도 요청 범위에서 수행하고 결과를 구분해 기록한다.
+- jsdom은 실제 레이아웃을 계산하지 않는다. PC/모바일 배치, 브라우저 CORS, Cloudflare Pages 직접 URL 접근/새로고침은 실제 브라우저 또는 배포 환경에서 별도로 확인한다.
+- 구현 변경 후 `npm run test:run`, `npm run lint`, `npm run build`를 실행한다. 실패/경고나 실행하지 못한 검증은 명확하게 보고한다.
+
 # API Contract
 
 - 프론트엔드와 백엔드 사이의 API 형식은 백엔드 레포지토리의 docs/API.md를 기준으로 한다.
@@ -137,7 +171,7 @@ LLM이 사전에 정의된 평가 기준을 바탕으로 답변을 분석한다.
 작업 후:
 
 1. 빌드 오류를 확인한다.
-2. 가능한 경우 테스트와 lint를 실행한다.
+2. 구현 변경 후 `npm run test:run`, `npm run lint`, `npm run build`를 실행한다. 실행하지 못하면 이유를 기록한다.
 3. 변경된 파일과 구현 내용을 요약한다.
 4. 불필요하게 변경된 코드가 없는지 확인한다.
 5. 남아 있는 문제나 검증하지 못한 부분이 있다면 명확하게 설명한다.

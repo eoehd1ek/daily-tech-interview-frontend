@@ -20,7 +20,7 @@
 | 빌드 | `vite.config.ts`: React 플러그인만 설정. 개발 API proxy 없음 |
 | 환경변수 예시 | `.env.example`: `VITE_API_BASE_URL=http://localhost:8080` |
 | TypeScript | `tsconfig.app.json`: Vite 타입, 미사용 변수 검사, `verbatimModuleSyntax` 설정. 타입 전용 import는 `import type` 사용 |
-| 품질 도구 | ESLint 및 React Hooks 규칙 구성. 테스트 script/테스트 도구는 선언되어 있지 않음 |
+| 품질 도구 | ESLint 및 React Hooks 규칙, Vitest/jsdom/Testing Library/MSW 자동 테스트. `npm run test:run`으로 실행 |
 | 패키지 관리 | `package-lock.json`이 있는 npm 프로젝트. 기존 dependency 버전 및 lockfile 유지 |
 
 `package.json`에 선언된 dependency 범위는 다음과 같다. 정확한 설치 버전은 lockfile을 기준으로 하며 이번 TODO 때문에 업그레이드하지 않는다.
@@ -225,7 +225,7 @@ CORS 확인 범위: `.env`의 API 주소는 `http://localhost:8080`이며, 검�
 - [ ] 375px/1280px 및 긴 질문/답변/피드백에서 레이아웃, 키보드 접근, input label, 진행/오류 안내를 확인한다.
 - [ ] 배포 정적 서버가 `/questions/...`, `/results/...` 접근을 프론트 `index.html`로 보내는 SPA fallback을 지원하는지 확인한다. `/api/...`는 fallback 대상이 아닌 백엔드로 연결한다. Vite 개발 서버에서 성공했다고 배포도 성공으로 간주하지 않는다.
 - [ ] 배포 환경의 API 주소/CORS 및 동기 평가 timeout 예산을 실제로 확인한다. origin이 다르면 backend CORS, HTTPS 화면이면 API의 HTTPS도 확인한다. Vite proxy를 선택할 경우 개발 전용이며 배포 문제를 해결하지 않음을 구분한다.
-- [ ] 각 작은 PR과 최종 통합에서 `npm run build`, `npm run lint`를 실행한다. 현재 자동 테스트 도구가 없으므로 존재하지 않는 `npm test`를 완료 기준으로 삼거나 테스트 dependency를 임의로 추가하지 않는다.
+- [ ] 각 작은 PR과 최종 통합에서 `npm run test:run`, `npm run build`, `npm run lint`를 실행한다. 테스트는 실제 API 검증을 대신하지 않는다.
 - [ ] 실제 검증 결과, 확인하지 못한 조건, 남은 합의 사항을 작업 결과에 기록한다. 빌드 성공만으로 사용자 흐름 검증을 대신하지 않는다.
 
 완료 기준: 실제 백엔드와 PC/모바일 핵심 흐름이 통과하고 실패 복구 및 결과 새로고침이 확인된다. API/배포 준비가 부족한 항목은 완료 체크하지 않고 구체적인 미검증 조건을 남긴다.
@@ -249,3 +249,17 @@ CORS 확인 범위: `.env`의 API 주소는 `http://localhost:8080`이며, 검�
 | 평가 결과 | 결과 페이지 `useState` + GET | 서버가 저장한 기록이 원본. 전역 store나 localStorage 불필요 |
 
 예정 구조는 기존 `src` 안에 `pages`와 `api`만 추가하는 수준이다. API 파일은 axios 설정/DTO와 질문/평가 요청을 구분하는 정도로 제한한다. 처음부터 `hooks`, `store`, `services`, `repositories`, 범용 form framework를 만들지 않는다. 컴포넌트가 지나치게 커질 때에만 실제 중복이나 화면 역할을 기준으로 분리한다. `useMemo`/`useCallback`, 캐싱, React Query는 핵심 흐름에 필요하지 않으므로 선제 도입하지 않는다.
+
+## 7. 자동 테스트 기반
+
+- [x] 테스트 전용 devDependency로 Vitest, jsdom, React Testing Library, user-event, jest-dom, MSW와 필수 peer `@testing-library/dom`을 추가한다. 기존 dependency의 선언/설치 버전은 유지한다.
+- [x] `vitest.config.ts`에서 jsdom과 공통 setup을 연결하고 테스트 API Origin을 `http://api.test`, POST timeout을 `180000`으로 고정한다. `.env`나 실행 중인 백엔드에 의존하지 않는다. 테스트 검색은 `src/**/*.test.{ts,tsx}`로 제한해 관리용 worktree를 포함하지 않는다.
+- [x] `src/test/server.ts`의 MSW Node interceptor는 테스트에만 사용한다. 미등록 요청은 `onUnhandledRequest`에서 통과시키지 않고 오류 처리하며, 앱이 예외를 잡더라도 afterEach에서 해당 테스트를 실패시킨다. 각 테스트 뒤 화면/handler/spy/환경변수를 정리한다.
+- [x] `QuestionAnswerPage.test.tsx`에서 실제 React/Router/axios와 사용자 입력을 사용해 공백 차단, 원문 POST, 분석 대기, 즉시 중복 form 제출 차단, 201 성공 후 결과 GET/화면 이동, 400/404/502/500 및 네트워크/timeout 후 답변 보존, 수동 재제출, 결과 GET 실패 시 POST 재전송 없음, 화면 이탈/질문 변경 후 이전 응답 무시를 검증한다. StrictMode를 유지한다.
+- [x] `client.test.ts`에서 정상 오류 코드/메시지, 비정상 본문, 공백 메시지, 네트워크/timeout, 취소, 내부 메시지 비노출을 검증한다. `evaluationAttempts.test.ts`에서 180초 POST 설정/GET 영향 없음, 잘못된 timeout 차단, 잘못된 성공 ID와 202 거부를 검증한다.
+
+검증 결과: 3개 파일의 43개 테스트, lint, build가 통과했다. 임시 미등록 요청 probe는 앱처럼 예외를 잡아도 MSW 차단 및 afterEach 검사로 실패하는 것을 확인하고 제거했다. 실제 서버/LLM으로 요청하지 않았다. 기존 React/MUI/axios 등 설치 버전은 변경하지 않았고 운영 소스도 수정하지 않았다. 프로덕션 번들은 기존과 동일하며 기존 약 553kB 크기 경고는 남아 있다.
+
+라이브러리 선택: Vitest는 현재 Vite 설정/TypeScript와 연결되는 실행 및 assertion 도구다. React Testing Library는 사용자에게 보이는 role/label로 화면을 검사하고, DOM peer는 요소 조회/waitFor를 제공한다. user-event는 입력/클릭 등 사용자 이벤트를 재현한다. jest-dom은 `toHaveValue`, `toBeDisabled` 등의 화면 assertion을 추가하며 별도 Jest runner는 필요 없다. jsdom은 Node에서 DOM을 제공하지만 실제 레이아웃/브라우저 CORS는 검증하지 않는다. MSW는 HTTP 계층을 가로채 앱 요청 코드를 유지하면서 계약 응답만 대체한다.
+
+호환성과 한계: MSW 3의 설정 API/axios XMLHttpRequest 조합으로 초기 검증이 실패해 새 테스트 dependency를 XMLHttpRequest를 가로채는 MSW 2.15.0으로 선택했다. MSW의 합성 XHR은 실제 timeout 시계를 모델링하지 않으므로 timeout 화면 복구 테스트만 axios의 `ECONNABORTED`를 test spy로 주입하며, 180000ms 설정 자체는 별도 API 테스트로 확인한다. 실제 timeout 경계, 모바일 배치, 배포 URL 새로고침, 실제 API/CORS/LLM 성공은 브라우저/통합 검증으로 별도 수행해야 한다. 이번 테스트 도입은 7단계 실제 연동 완료를 의미하지 않는다.
