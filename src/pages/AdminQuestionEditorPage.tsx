@@ -134,6 +134,9 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
     if (failure instanceof Error && !axios.isAxiosError(failure)) return failure.message
     const error = getApiError(failure)
     if (error.status === 413) return '요청 내용이 너무 큽니다. 입력 길이를 확인해주세요.'
+    if (error.status === 401 && error.code === 'AUTHENTICATION_REQUIRED') return '세션이 만료되었습니다. 입력은 유지됩니다. 다시 로그인 후 직접 시도해주세요.'
+    if (error.status === 403 && error.code === 'INVALID_CSRF_TOKEN') return '보안 토큰이 만료되었습니다. 입력은 유지됩니다. 다시 시도하면 토큰을 새로 확인합니다.'
+    if (error.status === 403 && error.code === 'ACCESS_DENIED') return '관리자 권한이 없습니다. 입력은 유지됩니다. 계정 권한을 확인해주세요.'
     if (!error.status) return testing
       ? '평가 응답을 받지 못했습니다. 다시 테스트하면 추가 LLM 비용이 발생할 수 있습니다.'
       : '저장 응답을 확인하지 못했습니다. 서버에 저장됐을 수 있으므로 관리자 목록에서 확인해주세요. 자동 재전송하지 않습니다.'
@@ -205,7 +208,7 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
 
   return <Stack spacing={3}>
     <Typography component="h1" variant="h4">{questionId === null ? '새 질문 만들기' : '질문 수정'}</Typography>
-    <Typography color="text.secondary">저장하면 사용자 질문 목록에 바로 반영됩니다. 관리자 기능에는 로그인·권한 확인이 없습니다.</Typography>
+    <Typography color="text.secondary">저장하면 사용자 질문 목록에 바로 반영됩니다. 관리자 세션에서 질문과 평가 기준을 관리합니다.</Typography>
     {questionId !== null && <Typography variant="body2" color="text.secondary">질문 ID: {questionId}</Typography>}
     <Button component={RouterLink} to="/admin/questions" sx={{ alignSelf: 'flex-start' }}>관리자 질문 목록으로</Button>
     {normalizationNotice && <Alert severity="warning">기존 기준 순서를 1부터 다시 지정했습니다. 저장 전 확인해주세요.</Alert>}

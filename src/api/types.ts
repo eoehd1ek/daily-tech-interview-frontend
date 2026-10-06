@@ -1,3 +1,15 @@
+export interface AuthUser {
+  id: number
+  loginId: string
+  role: string
+}
+
+export interface CsrfToken {
+  headerName: 'X-CSRF-TOKEN'
+  parameterName: '_csrf'
+  token: string
+}
+
 export interface QuestionSummary {
   id: number
   title: string

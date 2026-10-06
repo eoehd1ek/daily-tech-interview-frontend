@@ -3,13 +3,18 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router'
-import { expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import App from '../App'
-import { apiClient } from '../api/client'
+import { adminClient as apiClient, clearAdminSession } from '../api/auth'
 import type { AdminQuestionDetail, AdminQuestionRequest } from '../api/types'
+import { csrfToken, setupAdminAuth } from '../test/adminAuth'
 import { server } from '../test/server'
 
+beforeEach(setupAdminAuth)
+afterEach(clearAdminSession)
+
 const endpoint = 'http://api.test/api/admin/questions'
+const csrfConfig = { headers: { 'X-CSRF-TOKEN': csrfToken.token } }
 const request: AdminQuestionRequest = {
   title: '  인덱스 제목  ', content: '  인덱스를 설명해주세요.\n둘째 줄  ',
   criteria: [{ content: '  조회 이점을 설명한다.  ', maxScore: 100, displayOrder: 1 }],
@@ -36,6 +41,7 @@ function renderEditor(path = '/admin/questions/new', initialEntries = [path]) {
 }
 
 async function fillNew() {
+  await screen.findByRole('textbox', { name: '질문 제목' })
   const user = userEvent.setup()
   for (const [label, value] of [['질문 제목', request.title], ['질문 본문', request.content], ['기준 설명 1', request.criteria[0].content]]) {
     await user.click(screen.getByRole('textbox', { name: label }))
@@ -45,7 +51,7 @@ async function fillNew() {
 }
 
 async function enterTestAnswer(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('textbox', { name: '테스트 답변' }))
+  await user.click(await screen.findByRole('textbox', { name: '테스트 답변' }))
   await user.paste(answer)
 }
 
@@ -91,12 +97,12 @@ function mockList() {
   server.use(http.get(endpoint, () => HttpResponse.json([{ id: 9, title: '인덱스' }])))
 }
 
-it('starts with blank fields, one 100-point criterion, UTF-16 limits, and separate save/preview buttons', () => {
+it('starts with blank fields, one 100-point criterion, UTF-16 limits, and separate save/preview buttons', async () => {
   const get = vi.spyOn(apiClient, 'get')
   const post = vi.spyOn(apiClient, 'post')
   const put = vi.spyOn(apiClient, 'put')
   renderEditor()
-  expect(screen.getByRole('heading', { name: '새 질문 만들기', level: 1 })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: '새 질문 만들기', level: 1 })).toBeInTheDocument()
   for (const [label, maxLength] of [['질문 제목', 200], ['질문 본문', 10000], ['기준 설명 1', 1000], ['테스트 답변', 3000]] as const) {
     expect(screen.getByRole('textbox', { name: label })).toHaveValue('')
     expect(screen.getByRole('textbox', { name: label })).toHaveAttribute('maxlength', String(maxLength))
@@ -109,7 +115,8 @@ it('starts with blank fields, one 100-point criterion, UTF-16 limits, and separa
   expect(screen.getByRole('button', { name: '기준 1 아래로' })).toBeDisabled()
   expect(screen.getByRole('button', { name: '저장' })).toHaveAttribute('type', 'submit')
   expect(screen.getByRole('button', { name: '답변 테스트' })).toHaveAttribute('type', 'button')
-  expect(get).not.toHaveBeenCalled()
+  expect(get.mock.calls.length).toBeGreaterThan(0)
+  expect(get.mock.calls.every(([path]) => path === '/api/auth/me')).toBe(true)
   expect(post).not.toHaveBeenCalled()
   expect(put).not.toHaveBeenCalled()
 })
@@ -157,7 +164,7 @@ it('sorts details, swaps sparse order values without renumbering, and keeps crit
       { content: '첫째 기준', maxScore: 40, displayOrder: 2 },
       { content: '둘째 기준', maxScore: 60, displayOrder: 7 },
     ],
-  }])
+  }, csrfConfig])
   await waitFor(() => expect(screen.getByRole('button', { name: '저장' })).toBeEnabled())
 })
 
@@ -253,8 +260,8 @@ it('saves without a preview or answer, uses returned detail as baseline, and sta
   const user = await fillNew()
   await user.click(screen.getByRole('button', { name: '저장' }))
   await waitFor(() => expect(screen.getByRole('textbox', { name: '질문 제목' })).toHaveValue(saved.title))
-  expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions', request)
-  expect(get).not.toHaveBeenCalled()
+  expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions', request, csrfConfig)
+  expect(get.mock.calls.every(([path]) => path === '/api/auth/me' || path === '/api/auth/csrf')).toBe(true)
   expect(put).not.toHaveBeenCalled()
   expect(router.state.location.pathname).toBe('/admin/questions/new')
   const beforeUnload = new Event('beforeunload', { cancelable: true })
@@ -264,9 +271,9 @@ it('saves without a preview or answer, uses returned detail as baseline, and sta
   await user.type(screen.getByRole('textbox', { name: '질문 제목' }), '두 번째 제목')
   await user.click(screen.getByRole('button', { name: '저장' }))
   await waitFor(() => expect(screen.getByRole('button', { name: '저장' })).toBeEnabled())
-  expect(put).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/9', { ...request, title: '두 번째 제목' })
+  expect(put).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/9', { ...request, title: '두 번째 제목' }, csrfConfig)
   expect(post).toHaveBeenCalledTimes(1)
-  expect(get).not.toHaveBeenCalled()
+  expect(get.mock.calls.every(([path]) => path === '/api/auth/me' || path === '/api/auth/csrf')).toBe(true)
   mockList()
   await user.click(screen.getByRole('link', { name: '관리자 질문 목록으로' }))
   expect(await screen.findByRole('list', { name: '관리자 질문 목록' })).toBeInTheDocument()
@@ -284,7 +291,8 @@ it.each(['post', 'put'] as const)('locks all editor operations for pending %s, r
   try {
     await act(async () => { fireEvent.submit(form()); fireEvent.submit(form()); await pending.started })
     expect(spy).toHaveBeenCalledTimes(1)
-    expect(spy.mock.calls[0]).toHaveLength(2)
+    expect(spy.mock.calls[0]).toHaveLength(3)
+    expect(spy.mock.calls[0][2]).toEqual(csrfConfig)
     expect(pending.received).toHaveBeenCalledExactlyOnceWith(request)
     for (const label of ['질문 제목', '질문 본문', '기준 설명 1', '최대 배점 1', '순서 1', '테스트 답변']) expect(screen.getByLabelText(label)).toBeDisabled()
     for (const label of ['저장', '답변 테스트', '기준 추가']) expect(screen.getByRole('button', { name: label })).toBeDisabled()
@@ -315,7 +323,7 @@ it.each([400, 404, 413, 500, 'network'] as const)('preserves edit inputs and dir
   expect(screen.getByRole('button', { name: '저장' })).toBeEnabled()
   expect(screen.getByRole('button', { name: '답변 테스트' })).toBeEnabled()
   expect(put).toHaveBeenCalledTimes(1)
-  expect(get).toHaveBeenCalledTimes(before)
+  expect(get.mock.calls.filter(([path]) => path !== '/api/auth/csrf')).toHaveLength(before)
   await user.click(screen.getByRole('link', { name: '관리자 질문 목록으로' }))
   expect(await screen.findByRole('dialog', { name: '입력을 버리고 이동할까요?' })).toBeInTheDocument()
 })
@@ -337,7 +345,7 @@ it('previews unsaved current form without DB IDs or save calls and displays outc
   expect(screen.getByRole('textbox', { name: '테스트 답변' })).toHaveValue(answer)
   expect(screen.getByText('총점: 82 / 100점')).toBeInTheDocument()
   for (const text of ['PASS', preview.strengths, preview.weaknesses, preview.improvements]) expect(screen.getByText(text)).toBeInTheDocument()
-  expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/evaluation-preview', { ...request, title: request.title + ' 변경', answer })
+  expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/evaluation-preview', { ...request, title: request.title + ' 변경', answer }, csrfConfig)
   expect(put).not.toHaveBeenCalled()
   expect(router.state.location.pathname).toBe('/admin/questions/9/edit')
 })
@@ -385,7 +393,7 @@ it.each(['   ', 'x'.repeat(3001)])('rejects an invalid preview answer but still 
   expect(post).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: '저장' }))
   await waitFor(() => expect(screen.getByRole('button', { name: '저장' })).toBeEnabled())
-  expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions', request)
+  expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions', request, csrfConfig)
   expect(screen.getByRole('textbox', { name: '테스트 답변' })).toHaveValue(value)
 })
 
@@ -409,7 +417,7 @@ it.each([400, 413, 502, 500, 'network'] as const)('preserves all inputs after pr
   expect(post).toHaveBeenCalledTimes(1)
   await user.click(screen.getByRole('button', { name: '저장' }))
   await waitFor(() => expect(screen.getByRole('button', { name: '저장' })).toBeEnabled())
-  expect(post).toHaveBeenNthCalledWith(2, '/api/admin/questions', request)
+  expect(post).toHaveBeenNthCalledWith(2, '/api/admin/questions', request, csrfConfig)
   expect(post).toHaveBeenCalledTimes(2)
 })
 
@@ -430,7 +438,8 @@ it.each(['success', 'error'] as const)('expires preview at 180000ms without abor
       await first.started
     })
     expect(post).toHaveBeenCalledTimes(1)
-    expect(post.mock.calls[0]).toHaveLength(2)
+    expect(post.mock.calls[0]).toHaveLength(3)
+    expect(post.mock.calls[0][2]).toEqual(csrfConfig)
     await act(async () => { await vi.advanceTimersByTimeAsync(179999) })
     for (const label of ['질문 제목', '질문 본문', '기준 설명 1', '최대 배점 1', '순서 1', '테스트 답변']) expect(screen.getByLabelText(label)).toBeDisabled()
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled()
@@ -538,7 +547,7 @@ it.each(['success', 'error'] as const)('aborts detail GET on clean navigation an
   renderEditor('/admin/questions/9/edit')
   try {
     await started.promise
-    const calls = get.mock.calls.map(([, config]) => config?.signal)
+    const calls = get.mock.calls.filter(([path]) => path === '/api/admin/questions/9').map(([, config]) => config?.signal)
     expect(calls.some((signal) => signal && !signal.aborted)).toBe(true)
     await userEvent.setup().click(screen.getByRole('link', { name: '관리자 질문 목록으로' }))
     expect(await screen.findByRole('list', { name: '관리자 질문 목록' })).toBeInTheDocument()
@@ -570,14 +579,14 @@ it('exchanges dragged criterion order values while preserving unrelated criteria
   expect(screen.getByLabelText('최대 배점 2')).toHaveDisplayValue('30')
 })
 
-it.each(['0', '-1', '1.5', 'abc', '9007199254740992'])('rejects invalid edit route ID %s without any API request', (id) => {
+it.each(['0', '-1', '1.5', 'abc', '9007199254740992'])('rejects invalid edit route ID %s without any question API request', async (id) => {
   const get = vi.spyOn(apiClient, 'get')
   const post = vi.spyOn(apiClient, 'post')
   const put = vi.spyOn(apiClient, 'put')
   renderEditor(`/admin/questions/${id}/edit`)
-  expect(screen.getByRole('alert')).toHaveTextContent('잘못된 질문 ID')
+  expect(await screen.findByRole('alert')).toHaveTextContent('잘못된 질문 ID')
   expect(screen.queryByRole('textbox', { name: '질문 제목' })).not.toBeInTheDocument()
-  expect(get).not.toHaveBeenCalled()
+  expect(get.mock.calls.every(([path]) => path === '/api/auth/me')).toBe(true)
   expect(post).not.toHaveBeenCalled()
   expect(put).not.toHaveBeenCalled()
 })

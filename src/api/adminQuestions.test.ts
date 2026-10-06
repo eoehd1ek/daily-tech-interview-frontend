@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { http, HttpResponse } from 'msw'
 import type { JsonBodyType } from 'msw'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../test/server'
 import {
   createAdminQuestion,
@@ -11,6 +11,7 @@ import {
   updateAdminQuestion,
 } from './adminQuestions'
 import { apiClient } from './client'
+import { adminClient, clearAdminSession } from './auth'
 import type { AdminQuestionDetail, AdminQuestionRequest, EvaluationPreviewRequest, EvaluationPreviewResult } from './types'
 
 const endpoint = 'http://api.test/api/admin/questions'
@@ -43,23 +44,40 @@ const preview: EvaluationPreviewResult = {
 }
 const saveError = '서버에 질문이 저장됐을 수 있습니다'
 
+beforeEach(() => {
+  clearAdminSession()
+  server.use(http.get('http://api.test/api/auth/csrf', () => HttpResponse.json({
+    headerName: 'X-CSRF-TOKEN', parameterName: '_csrf', token: 'question-token',
+  })))
+})
+
+afterEach(() => clearAdminSession())
+
 describe('admin question request contract', () => {
   it('preserves the existing list GET with its signal and no timeout', async () => {
-    const get = vi.spyOn(apiClient, 'get')
+    const get = vi.spyOn(adminClient, 'get')
     const controller = new AbortController()
     const summaries = [{ id: detail.id, title: detail.title }]
-    server.use(http.get(endpoint, () => HttpResponse.json(summaries)))
+    server.use(http.get(endpoint, ({ request }) => {
+      expect(request.credentials).toBe('include')
+      expect(request.headers.has('X-CSRF-TOKEN')).toBe(false)
+      return HttpResponse.json(summaries)
+    }))
     await expect(getAdminQuestions(controller.signal)).resolves.toEqual(summaries)
     expect(get).toHaveBeenCalledExactlyOnceWith('/api/admin/questions', { signal: controller.signal })
     expect(apiClient.defaults.timeout).toBe(0)
+    expect(adminClient.defaults.timeout).toBe(0)
+    expect(apiClient.defaults.withCredentials).not.toBe(true)
+    expect(apiClient.defaults.headers.common['X-CSRF-TOKEN']).toBeUndefined()
   })
 
   it('gets validated detail with the caller signal and no timeout', async () => {
-    const get = vi.spyOn(apiClient, 'get')
+    const get = vi.spyOn(adminClient, 'get')
     const controller = new AbortController()
     server.use(http.get(`${endpoint}/3`, ({ request }) => {
       expect(request.method).toBe('GET')
       expect(request.body).toBeNull()
+      expect(request.credentials).toBe('include')
       return HttpResponse.json(detail)
     }))
     await expect(getAdminQuestion(3, controller.signal)).resolves.toEqual(detail)
@@ -77,10 +95,12 @@ describe('admin question request contract', () => {
   it.each(['create', 'update'] as const)('sends the raw %s body without IDs or a test answer', async (operation) => {
     const method = operation === 'create' ? 'post' : 'put'
     const path = operation === 'create' ? endpoint : `${endpoint}/3`
-    const spy = vi.spyOn(apiClient, method)
+    const spy = vi.spyOn(adminClient, method)
     let body: unknown
     server.use(http[method](path, async ({ request }) => {
       expect(request.method).toBe(method.toUpperCase())
+      expect(request.credentials).toBe('include')
+      expect(request.headers.get('X-CSRF-TOKEN')).toBe('question-token')
       body = await request.json()
       return HttpResponse.json(detail, { status: operation === 'create' ? 201 : 200 })
     }))
@@ -88,14 +108,18 @@ describe('admin question request contract', () => {
     await expect(operation === 'create' ? createAdminQuestion(request) : updateAdminQuestion(3, request)).resolves.toEqual(detail)
     expect(body).toEqual(original)
     expect(request).toEqual(original)
-    expect(spy).toHaveBeenCalledExactlyOnceWith(path.replace('http://api.test', ''), request)
+    expect(spy).toHaveBeenCalledExactlyOnceWith(path.replace('http://api.test', ''), request, {
+      headers: { 'X-CSRF-TOKEN': 'question-token' },
+    })
     expect(apiClient.defaults.timeout).toBe(0)
   })
 
   it('sends the raw preview body and returns only the seven contracted fields', async () => {
-    const post = vi.spyOn(apiClient, 'post')
+    const post = vi.spyOn(adminClient, 'post')
     let body: unknown
     server.use(http.post(`${endpoint}/evaluation-preview`, async ({ request }) => {
+      expect(request.credentials).toBe('include')
+      expect(request.headers.get('X-CSRF-TOKEN')).toBe('question-token')
       body = await request.json()
       return HttpResponse.json(preview)
     }))
@@ -103,7 +127,9 @@ describe('admin question request contract', () => {
     await expect(previewAdminQuestion(previewRequest)).resolves.toEqual(preview)
     expect(body).toEqual(original)
     expect(previewRequest).toEqual(original)
-    expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/evaluation-preview', previewRequest)
+    expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/evaluation-preview', previewRequest, {
+      headers: { 'X-CSRF-TOKEN': 'question-token' },
+    })
     expect(Object.keys(preview)).toHaveLength(7)
     expect(apiClient.defaults.timeout).toBe(0)
   })
@@ -153,7 +179,7 @@ describe('admin question detail validation', () => {
   it.each(['create', 'update'] as const)('rejects malformed %s successes with a safe uncertain-save warning', async (operation) => {
     const method = operation === 'create' ? 'post' : 'put'
     const path = operation === 'create' ? endpoint : `${endpoint}/3`
-    const spy = vi.spyOn(apiClient, method)
+    const spy = vi.spyOn(adminClient, method)
     for (const [, data] of invalidDetails) {
       server.use(http[method](path, () => HttpResponse.json(data, { status: operation === 'create' ? 201 : 200 })))
       await expect(operation === 'create' ? createAdminQuestion(request) : updateAdminQuestion(3, request)).rejects.toThrow(saveError)
@@ -162,7 +188,7 @@ describe('admin question detail validation', () => {
   })
 
   it('rejects a PUT success for a different question without retrying', async () => {
-    const put = vi.spyOn(apiClient, 'put')
+    const put = vi.spyOn(adminClient, 'put')
     server.use(http.put(`${endpoint}/3`, () => HttpResponse.json({ ...detail, id: 4 })))
     await expect(updateAdminQuestion(3, request)).rejects.toThrow(saveError)
     expect(put).toHaveBeenCalledTimes(1)
@@ -195,10 +221,10 @@ describe('preview response validation', () => {
 })
 
 const operations = [
-  { name: 'detail', method: 'get', path: `${endpoint}/3`, status: 200, data: detail, run: () => getAdminQuestion(3), error: '질문 상세 응답', errors: [400, 404, 500] },
-  { name: 'create', method: 'post', path: endpoint, status: 201, data: detail, run: () => createAdminQuestion(request), error: saveError, errors: [400, 413, 500] },
-  { name: 'update', method: 'put', path: `${endpoint}/3`, status: 200, data: detail, run: () => updateAdminQuestion(3, request), error: saveError, errors: [400, 404, 413, 500] },
-  { name: 'preview', method: 'post', path: `${endpoint}/evaluation-preview`, status: 200, data: preview, run: () => previewAdminQuestion(previewRequest), error: '평가 테스트 응답', errors: [400, 413, 502, 500] },
+  { name: 'detail', method: 'get', path: `${endpoint}/3`, status: 200, data: detail, run: () => getAdminQuestion(3), error: '질문 상세 응답', errors: [400, 401, 403, 404, 500] },
+  { name: 'create', method: 'post', path: endpoint, status: 201, data: detail, run: () => createAdminQuestion(request), error: saveError, errors: [400, 401, 403, 413, 500] },
+  { name: 'update', method: 'put', path: `${endpoint}/3`, status: 200, data: detail, run: () => updateAdminQuestion(3, request), error: saveError, errors: [400, 401, 403, 404, 413, 500] },
+  { name: 'preview', method: 'post', path: `${endpoint}/evaluation-preview`, status: 200, data: preview, run: () => previewAdminQuestion(previewRequest), error: '평가 테스트 응답', errors: [400, 401, 403, 413, 502, 500] },
 ] as const
 
 describe.each(operations)('$name status and transport errors', (operation) => {
@@ -209,7 +235,7 @@ describe.each(operations)('$name status and transport errors', (operation) => {
   })
 
   it.each(operation.errors)('propagates HTTP %s without automatic retransmission', async (status) => {
-    const spy = vi.spyOn(apiClient, operation.method)
+    const spy = vi.spyOn(adminClient, operation.method)
     const data = { code: 'CONTRACT_ERROR', message: 'Safe server error.' }
     server.use(http[operation.method](operation.path, () => status === 413
       ? new HttpResponse('<html>Too large</html>', { status, headers: { 'Content-Type': 'text/html' } })
@@ -219,9 +245,37 @@ describe.each(operations)('$name status and transport errors', (operation) => {
   })
 
   it('propagates network failure without automatic retransmission', async () => {
-    const spy = vi.spyOn(apiClient, operation.method)
+    const spy = vi.spyOn(adminClient, operation.method)
     server.use(http[operation.method](operation.path, () => HttpResponse.error()))
     await expect(operation.run()).rejects.toMatchObject({ isAxiosError: true })
     expect(spy).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('CSRF write prerequisites', () => {
+  it.each(operations.filter((operation) => operation.method !== 'get'))('blocks $name when CSRF fails', async (operation) => {
+    const spy = vi.spyOn(adminClient, operation.method)
+    server.use(http.get('http://api.test/api/auth/csrf', () => HttpResponse.error()))
+    await expect(operation.run()).rejects.toMatchObject({ isAxiosError: true })
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('blocks a write if the session changes while its CSRF response is pending', async () => {
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => { entered = resolve })
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    server.use(http.get('http://api.test/api/auth/csrf', async () => {
+      entered()
+      await gate
+      return HttpResponse.json({ headerName: 'X-CSRF-TOKEN', parameterName: '_csrf', token: 'old' })
+    }))
+    const post = vi.spyOn(adminClient, 'post')
+    const outcome = createAdminQuestion(request).catch((error: unknown) => error)
+    await started
+    clearAdminSession()
+    release()
+    expect(await outcome).toBeInstanceOf(Error)
+    expect(post).not.toHaveBeenCalled()
   })
 })

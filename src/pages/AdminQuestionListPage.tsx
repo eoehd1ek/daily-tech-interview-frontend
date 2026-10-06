@@ -51,7 +51,7 @@ function AdminQuestionListPage() {
           수정할 질문을 선택하거나 새 질문 작성을 시작하세요.
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          현재 관리자 기능에는 로그인·권한 확인이 없습니다. 로컬 또는 접근이 제한된 환경에서 사용하세요.
+          관리자 세션에서 질문과 평가 기준을 관리합니다.
         </Typography>
         <Button component={RouterLink} to="/admin/questions/new" variant="contained">
           새 질문 만들기

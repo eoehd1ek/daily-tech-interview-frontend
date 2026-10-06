@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { adminClient, getCsrfToken } from './auth'
 import type {
   AdminQuestionDetail,
   AdminQuestionRequest,
@@ -8,12 +8,12 @@ import type {
 } from './types'
 
 export async function getAdminQuestions(signal?: AbortSignal): Promise<QuestionSummary[]> {
-  const response = await apiClient.get<QuestionSummary[]>('/api/admin/questions', { signal })
+  const response = await adminClient.get<QuestionSummary[]>('/api/admin/questions', { signal })
   return response.data
 }
 
 export async function getAdminQuestion(id: number, signal?: AbortSignal): Promise<AdminQuestionDetail> {
-  const response = await apiClient.get<unknown>(`/api/admin/questions/${id}`, { signal })
+  const response = await adminClient.get<unknown>(`/api/admin/questions/${id}`, { signal })
   if (response.status !== 200 || !isAdminQuestionDetail(response.data) || response.data.id !== id) {
     throw new Error('질문 상세 응답을 확인하지 못했습니다. 다시 조회해주세요.')
   }
@@ -21,7 +21,10 @@ export async function getAdminQuestion(id: number, signal?: AbortSignal): Promis
 }
 
 export async function createAdminQuestion(request: AdminQuestionRequest): Promise<AdminQuestionDetail> {
-  const response = await apiClient.post<unknown>('/api/admin/questions', request)
+  const csrf = await getCsrfToken()
+  const response = await adminClient.post<unknown>('/api/admin/questions', request, {
+    headers: { [csrf.headerName]: csrf.token },
+  })
   if (response.status !== 201 || !isAdminQuestionDetail(response.data)) {
     throw new Error('저장 응답을 확인하지 못했습니다. 서버에 질문이 저장됐을 수 있습니다. 자동 재전송하지 않습니다. 목록이나 상세를 다시 조회해 확인해주세요.')
   }
@@ -29,7 +32,10 @@ export async function createAdminQuestion(request: AdminQuestionRequest): Promis
 }
 
 export async function updateAdminQuestion(id: number, request: AdminQuestionRequest): Promise<AdminQuestionDetail> {
-  const response = await apiClient.put<unknown>(`/api/admin/questions/${id}`, request)
+  const csrf = await getCsrfToken()
+  const response = await adminClient.put<unknown>(`/api/admin/questions/${id}`, request, {
+    headers: { [csrf.headerName]: csrf.token },
+  })
   if (response.status !== 200 || !isAdminQuestionDetail(response.data) || response.data.id !== id) {
     throw new Error('저장 응답을 확인하지 못했습니다. 서버에 질문이 저장됐을 수 있습니다. 자동 재전송하지 않습니다. 목록이나 상세를 다시 조회해 확인해주세요.')
   }
@@ -37,7 +43,10 @@ export async function updateAdminQuestion(id: number, request: AdminQuestionRequ
 }
 
 export async function previewAdminQuestion(request: EvaluationPreviewRequest): Promise<EvaluationPreviewResult> {
-  const response = await apiClient.post<unknown>('/api/admin/questions/evaluation-preview', request)
+  const csrf = await getCsrfToken()
+  const response = await adminClient.post<unknown>('/api/admin/questions/evaluation-preview', request, {
+    headers: { [csrf.headerName]: csrf.token },
+  })
   if (response.status !== 200 || !isEvaluationPreviewResult(response.data)) {
     throw new Error('평가 테스트 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해주세요.')
   }
