@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
   Alert, Button, CircularProgress, List, ListItem, ListItemButton,
-  ListItemText, Stack, Typography,
+  Box, Chip, ListItemText, Stack, Typography,
 } from '@mui/material'
 import { Link as RouterLink } from 'react-router'
 import { getApiError } from '../api/client'
 import { getQuestions } from '../api/questions'
 import type { ApiError, QuestionSummary } from '../api/types'
+import ContentCard from '../components/ContentCard'
+import PageHeader from '../components/PageHeader'
 
 function HomePage() {
   const [state, setState] = useState<{
@@ -45,18 +47,27 @@ function HomePage() {
 
   return (
     <Stack spacing={4}>
-      <Stack spacing={2}>
-        <Typography component="h1" variant="h4">
-          기술 질문에 답하고, 피드백으로 성장하세요
-        </Typography>
-        <Typography color="text.secondary">
-          기술 질문에 직접 답변하고, AI 평가로 잘 설명한 부분과 보완할 부분을 확인해보세요.
-        </Typography>
+      <PageHeader eyebrow="PRACTICE / FEEDBACK / GROWTH" title="기술 질문에 답하고, 피드백으로 성장하세요"
+        description="기술 질문에 직접 답변하고, AI 평가로 잘 설명한 부분과 보완할 부분을 확인해보세요." />
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        {[
+          ['01', '질문 선택', '설명하고 싶은 기술 질문을 고르세요.'],
+          ['02', '내 언어로 답변', '핵심 개념과 이유를 직접 정리하세요.'],
+          ['03', '피드백 확인', '강점과 개선점을 다음 답변에 연결하세요.'],
+        ].map(([number, title, description]) => <ContentCard key={number} sx={{ flex: 1, p: 2.5 }}>
+          <Typography variant="overline" color="text.secondary">{number}</Typography>
+          <Typography variant="subtitle1">{title}</Typography>
+          <Typography variant="body2" color="text.secondary">{description}</Typography>
+        </ContentCard>)}
       </Stack>
-      <Stack component="section" spacing={2} aria-labelledby="question-list-title">
+      <ContentCard component="section" aria-labelledby="question-list-title">
+      <Stack spacing={2}>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography component="h2" variant="h5" id="question-list-title">
           질문 목록
         </Typography>
+        {!state.isLoading && !state.error && <Chip size="small" variant="outlined" label={`${state.questions.length}개 질문`} />}
+        </Stack>
         {state.isLoading ? (
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }} role="status">
             <CircularProgress size={24} aria-label="질문 목록 조회 중" />
@@ -79,16 +90,18 @@ function HomePage() {
           </Typography>
         ) : (
           <List disablePadding aria-labelledby="question-list-title">
-            {state.questions.map((question) => (
+            {state.questions.map((question, index) => (
               <ListItem key={question.id} disablePadding divider>
-                <ListItemButton component={RouterLink} to={`/questions/${question.id}`}>
-                  <ListItemText primary={question.title} />
+                <ListItemButton component={RouterLink} to={`/questions/${question.id}`} sx={{ py: 2, gap: 2 }}>
+                  <Typography aria-hidden variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', minWidth: 24 }}>{String(index + 1).padStart(2, '0')}</Typography>
+                  <ListItemText primary={question.title} slotProps={{ primary: { sx: { fontWeight: 600 } } }} />
+                  <Box component="span" aria-hidden sx={{ color: 'text.secondary' }}>&gt;</Box>
                 </ListItemButton>
               </ListItem>
             ))}
           </List>
         )}
-      </Stack>
+      </Stack></ContentCard>
     </Stack>
   )
 }

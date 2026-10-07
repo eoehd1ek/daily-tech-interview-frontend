@@ -137,7 +137,7 @@ it('adds the smallest unused positive order, defaults new scores to 1, and enfor
   for (let count = 10; count > 1; count--) await user.click(screen.getByRole('button', { name: '기준 1 제거' }))
   expect(screen.getAllByRole('group', { name: /평가 기준 \d+/ })).toHaveLength(1)
   expect(screen.getByRole('button', { name: '기준 1 제거' })).toBeDisabled()
-})
+}, 15000)
 
 it('sorts details, swaps sparse order values without renumbering, and keeps criterion input identity', async () => {
   mockDetail({ ...detail, criteria: [

@@ -5,6 +5,8 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router'
 import { loginAdmin } from '../api/auth'
 import { getApiError } from '../api/client'
 import type { AuthUser } from '../api/types'
+import ContentCard from '../components/ContentCard'
+import PageHeader from '../components/PageHeader'
 
 export function AdminLoginForm({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
   const [loginId, setLoginId] = useState('')
@@ -80,12 +82,11 @@ function AdminLoginPage() {
     } catch { /* Ignore invalid navigation state. */ }
   }
 
-  return <Stack spacing={3} sx={{ maxWidth: 420, mx: 'auto', width: '100%' }}>
-    <Typography component="h1" variant="h4">관리자 로그인</Typography>
-    <Typography color="text.secondary">질문과 평가 기준을 관리하려면 로그인해주세요.</Typography>
+  return <ContentCard sx={{ maxWidth: 460, mx: 'auto', mt: { xs: 2, md: 6 } }}><Stack spacing={3}>
+    <PageHeader eyebrow="ADMIN ACCESS" title="관리자 로그인" description="질문과 평가 기준을 관리하려면 로그인해주세요." />
     <AdminLoginForm onSuccess={() => { void navigate(destination, { replace: true }) }} />
     <Button component={RouterLink} to="/">일반 서비스로</Button>
-  </Stack>
+  </Stack></ContentCard>
 }
 
 export default AdminLoginPage

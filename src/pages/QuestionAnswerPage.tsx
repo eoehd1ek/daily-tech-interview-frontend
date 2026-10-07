@@ -4,6 +4,7 @@ import axios from 'axios'
 import { Alert, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material'
 import { useNavigate, useParams } from 'react-router'
 import { getApiError } from '../api/client'
+import ContentCard from '../components/ContentCard'
 import { getQuestion } from '../api/questions'
 import { getEvaluationWaitTime, submitEvaluationAttempt } from '../api/evaluationAttempts'
 import type { ApiError, QuestionDetail } from '../api/types'
@@ -168,14 +169,15 @@ function QuestionAnswerContent({ questionId }: { questionId: number }) {
 
   const question = state.question
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={4}>
-      <Stack component="section" spacing={2} aria-labelledby="question-title" sx={{ flex: 1, minWidth: 0 }}>
+    <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: 'flex-start' }}>
+      <ContentCard component="section" aria-labelledby="question-title" sx={{ flex: 1, width: { xs: '100%', md: 'auto' } }}><Stack spacing={2}>
+        <Typography variant="overline" color="text.secondary">QUESTION / {question.id}</Typography>
         <Typography component="h1" variant="h4" id="question-title">
           {question.title}
         </Typography>
         <Typography sx={{ whiteSpace: 'pre-wrap' }}>{question.content}</Typography>
-      </Stack>
-      <Stack component="form" onSubmit={submit} spacing={2} aria-labelledby="answer-title" sx={{ flex: 1, minWidth: 0 }}>
+      </Stack></ContentCard>
+      <ContentCard sx={{ flex: 1, width: { xs: '100%', md: 'auto' } }}><Stack component="form" onSubmit={submit} spacing={2} aria-labelledby="answer-title">
         <Typography component="h2" variant="h5" id="answer-title">답변 작성</Typography>
         <TextField
           id="answer"
@@ -205,7 +207,7 @@ function QuestionAnswerContent({ questionId }: { questionId: number }) {
         <Typography variant="body2" color="text.secondary">
           작성 중인 답변은 페이지를 떠나거나 새로고침하면 사라집니다. 제출 중 화면을 떠나도 서버의 평가 처리가 취소되는 것은 아닙니다.
         </Typography>
-      </Stack>
+      </Stack></ContentCard>
     </Stack>
   )
 }

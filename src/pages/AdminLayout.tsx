@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle,
-  Link, Stack, Typography,
+  Stack, Typography,
 } from '@mui/material'
 import { Link as RouterLink, Navigate, Outlet, useLocation } from 'react-router'
 import { clearAdminSession, getCurrentAdmin, logoutAdmin, subscribeAdminSessionExpired } from '../api/auth'
 import { getApiError } from '../api/client'
 import type { AuthUser } from '../api/types'
 import { AdminLoginForm } from './AdminLoginPage'
+import AppShell from '../components/AppShell'
 
 function AdminLayout() {
   const location = useLocation()
@@ -71,27 +72,19 @@ function AdminLayout() {
     }
   }
 
-  if (state.status === 'loading') return <Stack direction="row" spacing={2} role="status" sx={{ alignItems: 'center' }}>
+  if (state.status === 'loading') return <AppShell mode="login"><Stack direction="row" spacing={2} role="status" sx={{ alignItems: 'center' }}>
     <CircularProgress size={24} /><Typography>관리자 세션을 확인하는 중입니다.</Typography>
-  </Stack>
+  </Stack></AppShell>
   if (state.status === 'anonymous') return <Navigate to="/admin/login" replace state={{ returnTo: location.pathname + location.search + location.hash }} />
   if (state.status === 'denied') return <Navigate to="/" replace />
-  if (state.status === 'error') return <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
+  if (state.status === 'error') return <AppShell mode="login"><Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
     <Alert severity="error">{state.message}</Alert>
     <Button onClick={() => { setState({ user: null, status: 'loading' }); setReload((value) => value + 1) }}>다시 시도</Button>
     <Button component={RouterLink} to="/">일반 서비스로</Button>
-  </Stack>
+  </Stack></AppShell>
 
-  return <Stack spacing={3}>
-    <Stack component="nav" aria-label="관리자 메뉴" direction={{ xs: 'column', sm: 'row' }} spacing={2}
-      sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-        <Link component={RouterLink} to="/">일반 서비스</Link>
-        <Link component={RouterLink} to="/admin/questions">질문 관리</Link>
-        <Typography variant="body2">{state.user?.loginId}</Typography>
-      </Stack>
-      <Button onClick={() => { void logout() }} disabled={logoutBusy || expired}>로그아웃</Button>
-    </Stack>
+  return <AppShell mode="admin" account={state.user?.loginId} onLogout={() => { void logout() }} logoutDisabled={logoutBusy || expired}>
+    <Stack spacing={3}>
     {logoutError && <Alert severity="error">{logoutError}</Alert>}
     {logoutBusy && <Typography role="status">로그아웃 중입니다.</Typography>}
     <Box inert={expired || logoutBusy}><Outlet /></Box>
@@ -111,7 +104,7 @@ function AdminLayout() {
         </Stack>
       </DialogContent>
     </Dialog>
-  </Stack>
+  </Stack></AppShell>
 }
 
 export default AdminLayout

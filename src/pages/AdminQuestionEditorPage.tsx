@@ -10,6 +10,8 @@ import { createAdminQuestion, getAdminQuestion, previewAdminQuestion, updateAdmi
 import { getApiError } from '../api/client'
 import { getEvaluationWaitTime } from '../api/evaluationAttempts'
 import type { AdminQuestionDetail, AdminQuestionRequest, EvaluationPreviewResult } from '../api/types'
+import ContentCard from '../components/ContentCard'
+import PageHeader from '../components/PageHeader'
 
 type Criterion = { key: number, content: string, maxScore: string, displayOrder: string }
 
@@ -207,13 +209,14 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
   }
 
   return <Stack spacing={3}>
-    <Typography component="h1" variant="h4">{questionId === null ? '새 질문 만들기' : '질문 수정'}</Typography>
-    <Typography color="text.secondary">저장하면 사용자 질문 목록에 바로 반영됩니다. 관리자 세션에서 질문과 평가 기준을 관리합니다.</Typography>
+    <PageHeader title={questionId === null ? '새 질문 만들기' : '질문 수정'} eyebrow="QUESTION EDITOR"
+      description="질문과 평가 기준을 함께 설계하고, 저장 전 답변을 테스트하세요. 저장한 질문은 사용자 목록에 바로 반영됩니다." />
     {questionId !== null && <Typography variant="body2" color="text.secondary">질문 ID: {questionId}</Typography>}
     <Button component={RouterLink} to="/admin/questions" sx={{ alignSelf: 'flex-start' }}>관리자 질문 목록으로</Button>
     {normalizationNotice && <Alert severity="warning">기존 기준 순서를 1부터 다시 지정했습니다. 저장 전 확인해주세요.</Alert>}
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={4}>
-      <Stack component="form" aria-label="질문 편집" onSubmit={save} noValidate spacing={2} sx={{ flex: 1, minWidth: 0 }}>
+    <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: 'flex-start' }}>
+      <ContentCard sx={{ flex: 1.2, width: { xs: '100%', md: 'auto' } }}><Stack component="form" aria-label="질문 편집" onSubmit={save} noValidate spacing={2}>
+        <Typography variant="overline" color="text.secondary">QUESTION DETAILS</Typography>
         <TextField label="질문 제목" value={title} disabled={busy !== null} fullWidth
           onChange={(event) => { changed(); setTitle(event.target.value) }} error={validated && titleInvalid}
           helperText={`${validated && titleInvalid ? '공백이 아닌 제목을 200자 이내로 작성해주세요. ' : ''}${title.length} / 200자`}
@@ -225,10 +228,10 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
         <Typography component="h2" variant="h5">평가 기준</Typography>
         <Typography role="status" color={total === 100 ? 'text.secondary' : 'error'}>배점 합계: {Number.isFinite(total) ? total : '확인 필요'} / 100점</Typography>
         {criteria.map((criterion, index) => <Box component="fieldset" key={criterion.key}
-          sx={{ m: 0, p: 2, minWidth: 0, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+          sx={{ m: 0, p: 2, minWidth: 0, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'action.hover' }}
           onDragOver={(event) => { if (!busy) event.preventDefault() }}
           onDrop={(event) => { event.preventDefault(); if (dragged.current !== null) swap(dragged.current, criterion.key); dragged.current = null }}>
-          <Typography component="legend">평가 기준 {index + 1}</Typography>
+          <Typography component="legend" variant="subtitle1" sx={{ px: 1 }}>평가 기준 {index + 1}</Typography>
           <Stack spacing={2}>
             <Button type="button" draggable={!busy} disabled={busy !== null} aria-label={`기준 ${index + 1} 드래그 교환`}
               onDragStart={(event) => { dragged.current = criterion.key; event.dataTransfer.setData('text/plain', String(criterion.key)) }}
@@ -237,13 +240,15 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
               onChange={(event) => updateCriterion(criterion.key, 'content', event.target.value)} error={validated && criterionErrors[index].content}
               helperText={`${validated && criterionErrors[index].content ? '공백이 아닌 설명을 1,000자 이내로 작성해주세요. ' : ''}${criterion.content.length} / 1000자`}
               slotProps={{ htmlInput: { maxLength: 1000 } }} />
-            <TextField label={`최대 배점 ${index + 1}`} type="number" value={criterion.maxScore} disabled={busy !== null}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField label={`최대 배점 ${index + 1}`} type="number" value={criterion.maxScore} disabled={busy !== null} sx={{ flex: 1, minWidth: 0 }}
               onChange={(event) => updateCriterion(criterion.key, 'maxScore', event.target.value)} error={validated && criterionErrors[index].score}
               helperText="1~100의 정수, 전체 합계 100점" slotProps={{ htmlInput: { min: 1, max: 100, step: 1 } }} />
-            <TextField label={`순서 ${index + 1}`} type="number" value={criterion.displayOrder} disabled={busy !== null}
+            <TextField label={`순서 ${index + 1}`} type="number" value={criterion.displayOrder} disabled={busy !== null} sx={{ flex: 1, minWidth: 0 }}
               onChange={(event) => updateCriterion(criterion.key, 'displayOrder', event.target.value)}
               onBlur={() => { if (!operation.current) setCriteria((items) => ordered(items)) }} error={validated && criterionErrors[index].order}
               helperText="1 이상 2147483647 이하의 중복 없는 정수" slotProps={{ htmlInput: { min: 1, max: 2147483647, step: 1 } }} />
+            </Stack>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
               <Button type="button" aria-label={`기준 ${index + 1} 위로`} disabled={busy !== null || index === 0}
                 onClick={() => swap(criterion.key, criteria[index - 1].key)}>위로</Button>
@@ -266,8 +271,9 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
         {saved && <Alert severity="success">질문이 저장되었습니다.</Alert>}
         {busy === 'save' && <Typography role="status">저장 중입니다.</Typography>}
         <Button type="submit" variant="contained" disabled={busy !== null}>저장</Button>
-      </Stack>
-      <Stack component="section" aria-labelledby="preview-title" spacing={2} sx={{ flex: 1, minWidth: 0 }}>
+      </Stack></ContentCard>
+      <ContentCard component="section" aria-labelledby="preview-title" sx={{ flex: 1, width: { xs: '100%', md: 'auto' }, position: { md: 'sticky' }, top: { md: 96 } }}><Stack spacing={2}>
+        <Typography variant="overline" color="text.secondary">EVALUATION SANDBOX</Typography>
         <Typography component="h2" variant="h5" id="preview-title">답변 평가 테스트</Typography>
         <Typography color="text.secondary">현재 폼 내용으로 평가합니다. 테스트 답변과 결과는 저장되지 않으며 LLM 비용이 발생할 수 있습니다. 개인정보는 입력하지 마세요.</Typography>
         <TextField label="테스트 답변" multiline minRows={8} fullWidth value={answer} disabled={busy !== null}
@@ -288,7 +294,7 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
           {([['잘 설명한 부분', result.strengths], ['부족하거나 잘못 설명한 부분', result.weaknesses], ['개선할 부분', result.improvements]] as const).map(([label, text]) =>
             <Box key={label}><Typography component="h4" variant="subtitle1">{label}</Typography><Typography sx={{ whiteSpace: 'pre-wrap' }}>{text}</Typography></Box>)}
         </Stack>}
-      </Stack>
+      </Stack></ContentCard>
     </Stack>
     <Dialog open={blocker.state === 'blocked'} aria-labelledby="leave-editor-title" aria-describedby="leave-editor-description"
       onClose={() => { if (blocker.state === 'blocked') blocker.reset() }}>

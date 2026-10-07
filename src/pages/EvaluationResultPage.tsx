@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Chip, CircularProgress, Divider, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material'
 import { useParams } from 'react-router'
 import { getApiError } from '../api/client'
 import { getEvaluationAttempt } from '../api/evaluationAttempts'
 import type { ApiError, EvaluationResult } from '../api/types'
+import ContentCard from '../components/ContentCard'
+import PageHeader from '../components/PageHeader'
 
 function EvaluationResultPage() {
   const { attemptId } = useParams<{ attemptId: string }>()
@@ -93,9 +95,9 @@ function EvaluationResultContent({ attemptId }: { attemptId: number }) {
   const evaluation = state.evaluation
   return (
     <Stack spacing={4}>
-      <Stack spacing={2}>
-        <Typography component="h1" variant="h4">평가 결과</Typography>
-        <Typography variant="h6" component="p">{evaluation.questionTitle}</Typography>
+      <PageHeader title="평가 결과" eyebrow="EVALUATION REPORT" description={evaluation.questionTitle} />
+      <ContentCard><Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
+        <Box><Typography variant="overline" color="text.secondary">TOTAL SCORE</Typography>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <Typography variant="h4" component="p" aria-label={`총점 ${evaluation.score}점, 100점 만점`}>
             {evaluation.score} / 100점
@@ -104,26 +106,25 @@ function EvaluationResultContent({ attemptId }: { attemptId: number }) {
             label={evaluation.result}
             color={evaluation.result === 'PASS' ? 'success' : evaluation.result === 'RETRY' ? 'warning' : 'error'}
           />
-        </Stack>
-      </Stack>
-      <Divider />
-      <Stack component="section" spacing={2} aria-labelledby="strengths-title">
+        </Stack></Box>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>점수와 함께 피드백을 읽고, 다음 답변에서 보완할 부분을 확인하세요.</Typography>
+      </Stack></ContentCard>
+      <ContentCard component="section" aria-labelledby="strengths-title"><Stack spacing={2}>
         <Typography component="h2" variant="h5" id="strengths-title">잘 설명한 부분</Typography>
         <Typography sx={{ whiteSpace: 'pre-wrap' }}>{evaluation.strengths}</Typography>
-      </Stack>
-      <Stack component="section" spacing={2} aria-labelledby="weaknesses-title">
+      </Stack></ContentCard>
+      <ContentCard component="section" aria-labelledby="weaknesses-title"><Stack spacing={2}>
         <Typography component="h2" variant="h5" id="weaknesses-title">부족하거나 잘못 설명한 부분</Typography>
         <Typography sx={{ whiteSpace: 'pre-wrap' }}>{evaluation.weaknesses}</Typography>
-      </Stack>
-      <Stack component="section" spacing={2} aria-labelledby="improvements-title">
+      </Stack></ContentCard>
+      <ContentCard component="section" aria-labelledby="improvements-title"><Stack spacing={2}>
         <Typography component="h2" variant="h5" id="improvements-title">개선할 부분</Typography>
         <Typography sx={{ whiteSpace: 'pre-wrap' }}>{evaluation.improvements}</Typography>
-      </Stack>
-      <Divider />
-      <Stack component="section" spacing={2} aria-labelledby="submitted-answer-title">
+      </Stack></ContentCard>
+      <ContentCard component="section" aria-labelledby="submitted-answer-title" sx={{ bgcolor: 'action.hover' }}><Stack spacing={2}>
         <Typography component="h2" variant="h5" id="submitted-answer-title">제출한 답변</Typography>
         <Typography sx={{ whiteSpace: 'pre-wrap' }}>{evaluation.answer}</Typography>
-      </Stack>
+      </Stack></ContentCard>
     </Stack>
   )
 }

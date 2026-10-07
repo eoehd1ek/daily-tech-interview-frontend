@@ -7,6 +7,8 @@ import { Link as RouterLink } from 'react-router'
 import { getApiError } from '../api/client'
 import { getAdminQuestions } from '../api/adminQuestions'
 import type { ApiError, QuestionSummary } from '../api/types'
+import ContentCard from '../components/ContentCard'
+import PageHeader from '../components/PageHeader'
 
 function AdminQuestionListPage() {
   const [state, setState] = useState<{
@@ -45,19 +47,11 @@ function AdminQuestionListPage() {
 
   return (
     <Stack spacing={4}>
-      <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
-        <Typography component="h1" variant="h4">질문 관리</Typography>
-        <Typography color="text.secondary">
-          수정할 질문을 선택하거나 새 질문 작성을 시작하세요.
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          관리자 세션에서 질문과 평가 기준을 관리합니다.
-        </Typography>
-        <Button component={RouterLink} to="/admin/questions/new" variant="contained">
+      <PageHeader eyebrow="QUESTION LIBRARY" title="질문 관리" description="수정할 질문을 선택하거나 새 질문 작성을 시작하세요."
+        action={<Button component={RouterLink} to="/admin/questions/new" variant="contained">
           새 질문 만들기
-        </Button>
-      </Stack>
-      <Stack component="section" spacing={2} aria-labelledby="admin-question-list-title">
+        </Button>} />
+      <ContentCard component="section" aria-labelledby="admin-question-list-title"><Stack spacing={2}>
         <Typography component="h2" variant="h5" id="admin-question-list-title">관리자 질문 목록</Typography>
         {state.isLoading ? (
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }} role="status">
@@ -79,14 +73,14 @@ function AdminQuestionListPage() {
           <List disablePadding aria-labelledby="admin-question-list-title">
             {state.questions.map((question) => (
               <ListItem key={question.id} disablePadding divider>
-                <ListItemButton component={RouterLink} to={`/admin/questions/${question.id}/edit`}>
-                  <ListItemText primary={question.title} />
+                <ListItemButton component={RouterLink} to={`/admin/questions/${question.id}/edit`} sx={{ py: 2 }}>
+                  <ListItemText primary={question.title} slotProps={{ primary: { sx: { fontWeight: 600 } } }} />
                 </ListItemButton>
               </ListItem>
             ))}
           </List>
         )}
-      </Stack>
+      </Stack></ContentCard>
     </Stack>
   )
 }
