@@ -37,9 +37,13 @@ it('loads only credentialed admin GETs, renders KST and keeps null tokens distin
   renderPage()
   const table = await screen.findByRole('table', { name: 'LLM 호출 기록' })
   expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
-    '상세', '시작 일시 (KST)', '상태', '용도', '요청 모델 / 공급자', '입력 토큰', '출력 토큰', '전체 토큰', '소요 시간',
+    '상세 정보', '시작 일시 (KST)', '상태', '용도', '요청 모델 / 공급자', '입력 토큰', '출력 토큰', '전체 토큰', '소요 시간',
   ])
   const row = within(table).getAllByRole('row')[1]
+  expect(within(row).getAllByRole('cell').map((cell) => cell.getAttribute('data-label'))).toEqual(
+    within(table).getAllByRole('columnheader').map((header) => header.textContent),
+  )
+  expect(within(row).getByRole('link', { name: '로그 102 상세' })).toHaveTextContent(/^#102$/)
   expect(within(within(row).getAllByRole('cell')[0]).getByRole('link', { name: '로그 102 상세' })).toHaveAttribute('href', '/admin/llm-call-logs/102')
   expect(row).toHaveTextContent('2026. 10. 26. 08:59:00')
   expect(within(row).getByText('0')).toBeInTheDocument()

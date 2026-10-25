@@ -111,18 +111,38 @@ function AdminLlmCallLogListPage() {
         {current.data.items.length === 0 ? <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
           <Typography role="status">{current.data.totalElements === 0 ? '검색 조건에 맞는 호출 기록이 없습니다.' : '현재 페이지에 기록이 없습니다. 첫 페이지에서 다시 조회해주세요.'}</Typography>
           {current.data.page > 0 && <Button onClick={() => setParams(logFilterParams(values))}>첫 페이지로</Button>}
-        </Stack> : <TableContainer tabIndex={0} role="region" aria-label="호출 로그 표 가로 스크롤">
-          <Table aria-label="LLM 호출 기록" sx={{ minWidth: 1100 }}>
-            <TableHead><TableRow>{['상세', '시작 일시 (KST)', '상태', '용도', '요청 모델 / 공급자', '입력 토큰', '출력 토큰', '전체 토큰', '소요 시간'].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+        </Stack> : <TableContainer sx={{ containerType: 'inline-size' }}>
+          <Table size="small" aria-label="LLM 호출 기록" sx={{
+            width: '100%', tableLayout: 'fixed',
+            '& th, & td': { px: 0.75, py: 1.25, overflowWrap: 'anywhere', verticalAlign: 'top', fontSize: '0.8rem' },
+            '& thead th:first-of-type': { textAlign: 'center' },
+            '& tbody td:first-of-type': { textAlign: 'center', verticalAlign: 'middle' },
+            '& .MuiChip-root': { maxWidth: '100%', height: 'auto' },
+            '& .MuiChip-label': { whiteSpace: 'normal', overflowWrap: 'anywhere', py: 0.5, px: 0.75 },
+            '@container (max-width: 699px)': {
+              '& thead': { display: 'none' },
+              '& tbody': { display: 'block' },
+              '& tbody tr': { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.5,
+                py: 2, borderBottom: '1px solid', borderColor: 'divider' },
+              '& tbody td': { display: 'block', minWidth: 0, p: 0, border: 0 },
+              '& tbody td:first-of-type': { gridColumn: '1 / -1' },
+              '& tbody td::before': { content: 'attr(data-label)', display: 'block', color: 'text.secondary', fontSize: '0.75rem', mb: 0.5 },
+            },
+          }}>
+            <TableHead><TableRow>{[
+               ['상세 정보', 11], ['시작 일시 (KST)', 15], ['상태', 13], ['용도', 10], ['요청 모델 / 공급자', 15],
+              ['입력 토큰', 9], ['출력 토큰', 9], ['전체 토큰', 9], ['소요 시간', 9],
+            ].map(([label, width]) => <TableCell key={label} sx={{ width: `${width}%` }}>{label}</TableCell>)}</TableRow></TableHead>
             <TableBody>{current.data.items.map((log) => <TableRow key={log.id}>
-              <TableCell><Button component={RouterLink} to={`/admin/llm-call-logs/${log.id}${search ? `?${search}` : ''}`} aria-label={`로그 ${log.id} 상세`}>상세 #{log.id}</Button></TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{timeFormat.format(new Date(log.startedAt))}</TableCell>
-              <TableCell><Chip size="small" label={statuses[log.status]} color={log.status === 'FAILED' ? 'error' : log.status === 'SUCCEEDED' ? 'success' : 'default'} />
+              <TableCell data-label="상세 정보"><Button component={RouterLink} to={`/admin/llm-call-logs/${log.id}${search ? `?${search}` : ''}`} aria-label={`로그 ${log.id} 상세`}
+                 size="small" sx={{ width: '100%', minWidth: 0, minHeight: 36, px: 0.5, fontSize: '0.875rem', overflowWrap: 'anywhere' }}>#{log.id}</Button></TableCell>
+              <TableCell data-label="시작 일시 (KST)">{timeFormat.format(new Date(log.startedAt))}</TableCell>
+              <TableCell data-label="상태"><Chip size="small" label={statuses[log.status]} color={log.status === 'FAILED' ? 'error' : log.status === 'SUCCEEDED' ? 'success' : 'default'} />
                 {log.failureStage && <Typography variant="caption" sx={{ display: 'block' }}>{log.failureStage}</Typography>}</TableCell>
-              <TableCell>{purposes[log.purpose]}</TableCell>
-              <TableCell sx={{ overflowWrap: 'anywhere', maxWidth: 200 }}>{log.requestedModel}<Typography variant="caption" sx={{ display: 'block' }}>{log.provider}</Typography></TableCell>
-              {[log.inputTokens, log.outputTokens, log.totalTokens].map((tokens, index) => <TableCell key={index}>{tokens === null ? '미확인' : tokens.toLocaleString('ko-KR')}</TableCell>)}
-              <TableCell>{log.durationMs === null ? '-' : `${log.durationMs.toLocaleString('ko-KR')} ms`}</TableCell>
+              <TableCell data-label="용도">{purposes[log.purpose]}</TableCell>
+              <TableCell data-label="요청 모델 / 공급자">{log.requestedModel}<Typography variant="caption" sx={{ display: 'block' }}>{log.provider}</Typography></TableCell>
+              {[log.inputTokens, log.outputTokens, log.totalTokens].map((tokens, index) => <TableCell key={index} data-label={['입력 토큰', '출력 토큰', '전체 토큰'][index]}>{tokens === null ? '미확인' : tokens.toLocaleString('ko-KR')}</TableCell>)}
+              <TableCell data-label="소요 시간">{log.durationMs === null ? '-' : `${log.durationMs.toLocaleString('ko-KR')} ms`}</TableCell>
             </TableRow>)}</TableBody>
           </Table>
         </TableContainer>}
