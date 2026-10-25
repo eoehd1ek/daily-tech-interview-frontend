@@ -86,3 +86,61 @@ export interface ApiError {
   message: string
   isCanceled: boolean
 }
+
+export type JsonValue = null | boolean | number | string | JsonValue[] | JsonObject
+export interface JsonObject { [key: string]: JsonValue }
+export type LlmCallLogStatus = 'STARTED' | 'SUCCEEDED' | 'FAILED'
+export type LlmCallLogPurpose = 'ANSWER_EVALUATION' | 'ADMIN_PREVIEW'
+export type LlmCallLogFailureStage = 'MODEL_CALL' | 'EMPTY_RESPONSE' | 'RESPONSE_PARSE'
+
+export interface LlmCallLogQuery {
+  page: number
+  size: number
+  startedFrom?: string
+  startedTo?: string
+  status?: LlmCallLogStatus
+  purpose?: LlmCallLogPurpose
+  model?: string
+}
+
+export interface LlmCallLogSummary {
+  id: number
+  purpose: LlmCallLogPurpose
+  status: LlmCallLogStatus
+  provider: string
+  requestedModel: string
+  responseModel: string | null
+  startedAt: string
+  completedAt: string | null
+  durationMs: number | null
+  inputTokens: number | null
+  outputTokens: number | null
+  totalTokens: number | null
+  failureStage: LlmCallLogFailureStage | null
+}
+
+export interface LlmCallLogPage {
+  items: LlmCallLogSummary[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export interface LlmCallLogDetail extends LlmCallLogSummary {
+  questionId: number | null
+  evaluationAttemptId: number | null
+  createdAt: string
+  responseId: string | null
+  finishReason: string | null
+  cachedInputTokens: number | null
+  reasoningTokens: number | null
+  requestMessages: { role: string; content: string }[]
+  requestOptions: JsonObject
+  responseData: {
+    results: { index: number; text: string | null; finishReason: string | null; metadata: JsonObject }[]
+    metadata: JsonObject
+    usage: JsonObject | null
+  } | null
+  errorData: { type: string; message: string | null; causes: { type: string; message: string | null }[] } | null
+}

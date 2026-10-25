@@ -275,7 +275,7 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
       <ContentCard component="section" aria-labelledby="preview-title" sx={{ flex: 1, width: { xs: '100%', md: 'auto' }, position: { md: 'sticky' }, top: { md: 96 } }}><Stack spacing={2}>
         <Typography variant="overline" color="text.secondary">EVALUATION SANDBOX</Typography>
         <Typography component="h2" variant="h5" id="preview-title">답변 평가 테스트</Typography>
-        <Typography color="text.secondary">현재 폼 내용으로 평가합니다. 테스트 답변과 결과는 저장되지 않으며 LLM 비용이 발생할 수 있습니다. 개인정보는 입력하지 마세요.</Typography>
+        <Typography color="text.secondary">현재 폼 내용으로 평가하며 질문·평가 기준과 평가 기록은 저장하지 않습니다. 호출 로그 기능이 적용된 서버에서는 미저장 초안·테스트 답변·응답이 호출 로그에 영구 보관됩니다. LLM 비용이 발생할 수 있으므로 개인정보와 비밀정보는 입력하지 마세요.</Typography>
         <TextField label="테스트 답변" multiline minRows={8} fullWidth value={answer} disabled={busy !== null}
           onChange={(event) => { changed(); setAnswer(event.target.value) }} error={previewValidated && answerInvalid}
           helperText={`${previewValidated && answerInvalid ? '공백이 아닌 답변을 3,000자 이내로 작성해주세요. ' : ''}${answer.length} / 3000자`}

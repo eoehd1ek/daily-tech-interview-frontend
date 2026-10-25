@@ -17,7 +17,8 @@ function AppShell({ children, mode = 'public', account, onLogout, logoutDisabled
   const location = useLocation()
   const admin = mode === 'admin'
   const label = admin ? '관리자 메뉴' : '주요 메뉴'
-  const section = location.pathname.includes('/results/') ? '평가 리포트'
+  const section = admin && location.pathname.startsWith('/admin/llm-call-logs') ? 'LLM 호출 로그'
+    : location.pathname.includes('/results/') ? '평가 리포트'
     : location.pathname.includes('/questions/') ? admin ? '질문 편집' : '답변 워크스페이스'
       : admin ? '질문 라이브러리 관리' : mode === 'login' ? '관리자 로그인' : '질문 라이브러리'
 
@@ -34,6 +35,10 @@ function AppShell({ children, mode = 'public', account, onLogout, logoutDisabled
           <ListItemButton component={RouterLink} to="/admin/questions" aria-label="질문 관리" selected={location.pathname.startsWith('/admin/questions')}
             aria-current={location.pathname.startsWith('/admin/questions') ? 'page' : undefined} onClick={() => setOpen(false)}>
             <ListItemText primary="질문 관리" secondary="질문 · 기준 · 평가 테스트" />
+          </ListItemButton>
+          <ListItemButton component={RouterLink} to="/admin/llm-call-logs" aria-label="LLM 호출 로그" selected={location.pathname.startsWith('/admin/llm-call-logs')}
+            aria-current={location.pathname.startsWith('/admin/llm-call-logs') ? 'page' : undefined} onClick={() => setOpen(false)}>
+            <ListItemText primary="LLM 호출 로그" secondary="요청 · 응답 · 토큰 · 오류" />
           </ListItemButton>
           <ListItemButton component={RouterLink} to="/" onClick={() => setOpen(false)}><ListItemText primary="일반 서비스" /></ListItemButton>
         </> : <ListItemButton component={RouterLink} to="/" aria-label={mode === 'login' ? '일반 서비스로' : '메인으로'} selected={mode === 'public'} aria-current={location.pathname === '/' ? 'page' : undefined}

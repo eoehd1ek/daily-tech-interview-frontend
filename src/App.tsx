@@ -7,6 +7,8 @@ import AdminQuestionListPage from './pages/AdminQuestionListPage'
 import AdminQuestionEditorPage from './pages/AdminQuestionEditorPage'
 import AdminLayout from './pages/AdminLayout'
 import AdminLoginPage from './pages/AdminLoginPage'
+import AdminLlmCallLogListPage from './pages/AdminLlmCallLogListPage'
+import AdminLlmCallLogDetailPage from './pages/AdminLlmCallLogDetailPage'
 import AppShell from './components/AppShell'
 import theme from './theme'
 
@@ -28,6 +30,8 @@ function App() {
           <Route path="questions" element={<AdminQuestionListPage />} />
           <Route path="questions/new" element={<AdminQuestionEditorPage isNew />} />
           <Route path="questions/:questionId/edit" element={<AdminQuestionEditorPage isNew={false} />} />
+          <Route path="llm-call-logs" element={<AdminLlmCallLogListPage />} />
+          <Route path="llm-call-logs/:logId" element={<AdminLlmCallLogDetailPage />} />
           <Route path="*" element={<Stack spacing={2}><Typography component="h1" variant="h4">페이지를 찾을 수 없습니다</Typography>
             <Link component={RouterLink} to="/admin/questions">관리자 질문 목록으로</Link></Stack>} />
         </Route>
