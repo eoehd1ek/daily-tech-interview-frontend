@@ -18,6 +18,7 @@ const endpoint = 'http://api.test/api/admin/questions'
 const request: AdminQuestionRequest = {
   title: '  Question title  ',
   content: '  Original\nquestion content  ',
+  categories: ['FRONTEND', 'BACKEND'],
   criteria: [
     { content: '  Second criterion\n  ', maxScore: 40, displayOrder: 7 },
     { content: '  First criterion  ', maxScore: 60, displayOrder: 2 },
@@ -27,12 +28,15 @@ const detail: AdminQuestionDetail = {
   id: 3,
   title: request.title,
   content: request.content,
+  categories: request.categories,
   criteria: [
     { id: 11, ...request.criteria[1] },
     { id: 12, ...request.criteria[0] },
   ],
 }
-const previewRequest: EvaluationPreviewRequest = { ...request, answer: '  Original\nanswer  ' }
+const previewRequest: EvaluationPreviewRequest = {
+  title: request.title, content: request.content, criteria: request.criteria, answer: '  Original\nanswer  ',
+}
 const preview: EvaluationPreviewResult = {
   questionTitle: request.title,
   answer: previewRequest.answer,
@@ -57,7 +61,7 @@ describe('admin question request contract', () => {
   it('preserves the existing list GET with its signal and no timeout', async () => {
     const get = vi.spyOn(adminClient, 'get')
     const controller = new AbortController()
-    const summaries = [{ id: detail.id, title: detail.title }]
+    const summaries = [{ id: detail.id, title: detail.title, categories: detail.categories }]
     server.use(http.get(endpoint, ({ request }) => {
       expect(request.credentials).toBe('include')
       expect(request.headers.has('X-CSRF-TOKEN')).toBe(false)
@@ -127,6 +131,7 @@ describe('admin question request contract', () => {
     await expect(previewAdminQuestion(previewRequest)).resolves.toEqual(preview)
     expect(body).toEqual(original)
     expect(previewRequest).toEqual(original)
+    expect(body).not.toHaveProperty('categories')
     expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/evaluation-preview', previewRequest, {
       headers: { 'X-CSRF-TOKEN': 'question-token' },
     })
@@ -154,6 +159,9 @@ const invalidDetails: [string, JsonBodyType][] = [
   ...[0, -1, 1.5, '3', null, Number.MAX_SAFE_INTEGER + 1].map((id): [string, JsonBodyType] => [`id ${id}`, { ...detail, id }]),
   ['missing title', { ...detail, title: undefined }], ['null title', { ...detail, title: null }],
   ['numeric content', { ...detail, content: 1 }], ['missing content', { ...detail, content: undefined }],
+  ...[undefined, null, 'FRONTEND', {}, ['COMMON'], ['frontend'], [' FRONTEND '], [null], [0],
+    ['FRONTEND', 'FRONTEND'], Array(6).fill('BACKEND')].map((categories): [string, JsonBodyType] =>
+    [`categories ${JSON.stringify(categories)}`, { ...detail, categories }]),
   ['null criteria', { ...detail, criteria: null }], ['object criteria', { ...detail, criteria: {} }],
   ['missing criteria', { ...detail, criteria: undefined }], ['null criterion', { ...detail, criteria: [null] }],
   ['array criterion', { ...detail, criteria: [[]] }],
@@ -166,6 +174,33 @@ const invalidDetails: [string, JsonBodyType][] = [
 ]
 
 describe('admin question detail validation', () => {
+  it.each([{ categories: [] }, { categories: ['BACKEND'] }, { categories: ['FRONTEND', 'BACKEND'] }] as const)('sends explicit category selections $categories on create and complete replacement', async ({ categories }) => {
+    const data = { ...request, categories: [...categories] }
+    const stored = { ...detail, categories: [...categories] }
+    server.use(
+      http.post(endpoint, async ({ request }) => {
+        expect(await request.json()).toEqual(data)
+        return HttpResponse.json(stored, { status: 201 })
+      }),
+      http.put(`${endpoint}/3`, async ({ request }) => {
+        expect(await request.json()).toEqual(data)
+        return HttpResponse.json(stored)
+      }),
+    )
+    await expect(createAdminQuestion(data)).resolves.toEqual(stored)
+    await expect(updateAdminQuestion(3, data)).resolves.toEqual(stored)
+  })
+
+  it('preserves the request selection order and accepts canonical categories in the saved response', async () => {
+    const data: AdminQuestionRequest = { ...request, categories: ['BACKEND', 'FRONTEND'] }
+    server.use(http.post(endpoint, async ({ request }) => {
+      expect(await request.json()).toEqual(data)
+      return HttpResponse.json(detail, { status: 201 })
+    }))
+    await expect(createAdminQuestion(data)).resolves.toEqual(detail)
+    expect(data.categories).toEqual(['BACKEND', 'FRONTEND'])
+  })
+
   it('rejects a GET detail for a different question', async () => {
     server.use(http.get(`${endpoint}/3`, () => HttpResponse.json({ ...detail, id: 4 })))
     await expect(getAdminQuestion(3)).rejects.toThrow('질문 상세 응답')

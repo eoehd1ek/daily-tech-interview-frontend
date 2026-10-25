@@ -21,7 +21,7 @@ const evaluation: EvaluationResult = {
 
 function renderQuestion() {
   server.use(http.get('http://api.test/api/questions/:questionId', ({ params }) =>
-    HttpResponse.json({ id: Number(params.questionId), title: '인덱스', content: '인덱스를 설명해주세요.' }),
+    HttpResponse.json({ id: Number(params.questionId), title: '인덱스', content: '인덱스를 설명해주세요.', categories: [] }),
   ))
   return render(
     <StrictMode>

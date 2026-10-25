@@ -6,6 +6,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import App from '../App'
 import { adminClient, clearAdminSession } from '../api/auth'
+import type { QuestionSummary } from '../api/types'
 import { setupAdminAuth } from '../test/adminAuth'
 import { server } from '../test/server'
 
@@ -13,8 +14,14 @@ beforeEach(setupAdminAuth)
 afterEach(clearAdminSession)
 
 const endpoint = 'http://api.test/api/admin/questions'
-const questions = [{ id: 9, title: '인덱스' }, { id: 2, title: 'Java GC' }]
-const detail = { id: 9, title: '인덱스', content: '인덱스를 설명해주세요.', criteria: [{ id: 91, content: '조회 이점', maxScore: 100, displayOrder: 1 }] }
+const questions: QuestionSummary[] = [{ id: 9, title: '인덱스', categories: [] }, { id: 2, title: 'Java GC', categories: [] }]
+const detail = { id: 9, title: '인덱스', content: '인덱스를 설명해주세요.', categories: [], criteria: [{ id: 91, content: '조회 이점', maxScore: 100, displayOrder: 1 }] }
+const categorizedQuestions: QuestionSummary[] = [
+  { id: 1, title: '분류 없는 질문', categories: [] },
+  { id: 2, title: '렌더링 질문', categories: ['FRONTEND'] },
+  { id: 3, title: '서버 질문', categories: ['BACKEND'] },
+  { id: 4, title: 'HTTP 질문', categories: ['FRONTEND', 'BACKEND'] },
+]
 
 function renderAdmin(path = '/admin/questions') {
   const router = createMemoryRouter([{ path: '*', element: <App /> }], { initialEntries: [path] })
@@ -71,6 +78,10 @@ it('shows an empty state and allows navigation to a blank new editor and back', 
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   expect(screen.queryByRole('list')).not.toBeInTheDocument()
   const user = userEvent.setup()
+  await user.click(screen.getByRole('combobox', { name: '질문 카테고리' }))
+  await user.click(screen.getByRole('option', { name: '백엔드' }))
+  expect(screen.getByRole('status')).toHaveTextContent('아직 등록된 질문이 없습니다.')
+  expect(screen.queryByText('선택한 카테고리에 해당하는 질문이 없습니다.')).not.toBeInTheDocument()
   const before = received.mock.calls.length
   await user.click(screen.getByRole('link', { name: '새 질문 만들기' }))
   expect(await screen.findByRole('heading', { name: '새 질문 만들기', level: 1 })).toBeInTheDocument()
@@ -82,9 +93,93 @@ it('shows an empty state and allows navigation to a blank new editor and back', 
   expect(received.mock.calls.length).toBeGreaterThan(before)
 })
 
+it('shows category badges and filters unclassified, single and dual membership locally with matching counts', async () => {
+  const get = vi.spyOn(adminClient, 'get')
+  server.use(http.get(endpoint, () => HttpResponse.json(categorizedQuestions)))
+  renderAdmin()
+  const list = await screen.findByRole('list', { name: '관리자 질문 목록' })
+  expect(within(list).getAllByRole('link')).toHaveLength(4)
+  expect(screen.getByText('4개 질문')).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: '질문 카테고리' })).toHaveTextContent('전체')
+  const unclassified = within(list).getByRole('link', { name: '분류 없는 질문' })
+  expect(unclassified.textContent).toBe('분류 없는 질문')
+  expect(within(list).queryByText('미분류')).not.toBeInTheDocument()
+  const frontend = within(list).getByRole('link', { name: '렌더링 질문' })
+  expect(within(frontend).getByText('프론트엔드')).toBeInTheDocument()
+  expect(within(frontend).queryByText('백엔드')).not.toBeInTheDocument()
+  const backend = within(list).getByRole('link', { name: '서버 질문' })
+  expect(within(backend).getByText('백엔드')).toBeInTheDocument()
+  const dual = within(list).getByRole('link', { name: 'HTTP 질문' })
+  expect(within(dual).getByText('프론트엔드')).toBeInTheDocument()
+  expect(within(dual).getByText('백엔드')).toBeInTheDocument()
+  expect(dual).toHaveAccessibleName('HTTP 질문')
+  expect(dual).toHaveAttribute('href', '/admin/questions/4/edit')
+  const before = get.mock.calls.length
+  const user = userEvent.setup()
+  for (const [label, titles] of [
+    ['프론트엔드', ['렌더링 질문', 'HTTP 질문']],
+    ['백엔드', ['서버 질문', 'HTTP 질문']],
+    ['전체', categorizedQuestions.map((question) => question.title)],
+  ] as const) {
+    await user.click(screen.getByRole('combobox', { name: '질문 카테고리' }))
+    await user.click(screen.getByRole('option', { name: label }))
+    const links = within(screen.getByRole('list', { name: '관리자 질문 목록' })).getAllByRole('link')
+    expect(links.map((link) => link.getAttribute('aria-label'))).toEqual(titles)
+    expect(screen.getByText(`${titles.length}개 질문`)).toBeInTheDocument()
+  }
+  expect(get).toHaveBeenCalledTimes(before)
+})
+
+it('shows a filtered-empty message instead of the global empty message without another GET', async () => {
+  const get = vi.spyOn(adminClient, 'get')
+  server.use(http.get(endpoint, () => HttpResponse.json(questions)))
+  renderAdmin()
+  await screen.findByRole('list', { name: '관리자 질문 목록' })
+  const before = get.mock.calls.length
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('combobox', { name: '질문 카테고리' }))
+  await user.click(screen.getByRole('option', { name: '프론트엔드' }))
+  expect(screen.getByRole('status')).toHaveTextContent('선택한 카테고리에 해당하는 질문이 없습니다.')
+  expect(screen.getByText('0개 질문')).toBeInTheDocument()
+  expect(screen.queryByText('아직 등록된 질문이 없습니다.')).not.toBeInTheDocument()
+  expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  expect(get).toHaveBeenCalledTimes(before)
+})
+
+it('resets the category to all on returning from another route and remounting', async () => {
+  server.use(http.get(endpoint, () => HttpResponse.json(categorizedQuestions)))
+  const view = renderAdmin()
+  await screen.findByRole('list', { name: '관리자 질문 목록' })
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('combobox', { name: '질문 카테고리' }))
+  await user.click(screen.getByRole('option', { name: '백엔드' }))
+  await user.click(screen.getByRole('link', { name: '새 질문 만들기' }))
+  await user.click(screen.getByRole('link', { name: '관리자 질문 목록으로' }))
+  expect(await screen.findByRole('link', { name: '분류 없는 질문' })).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: '질문 카테고리' })).toHaveTextContent('전체')
+  await user.click(screen.getByRole('combobox', { name: '질문 카테고리' }))
+  await user.click(screen.getByRole('option', { name: '프론트엔드' }))
+  view.unmount()
+  renderAdmin()
+  expect(await screen.findByRole('link', { name: '분류 없는 질문' })).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: '질문 카테고리' })).toHaveTextContent('전체')
+  expect(screen.getByText('4개 질문')).toBeInTheDocument()
+})
+
+it.each([
+  { id: 1, title: '누락된 분류' },
+  { id: 1, title: '알 수 없는 분류', categories: ['COMMON'] },
+])('rejects invalid list categories without rendering the question: $title', async (question) => {
+  server.use(http.get(endpoint, () => HttpResponse.json([question])))
+  renderAdmin()
+  expect(await screen.findByRole('alert')).toHaveTextContent('연결 상태')
+  expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: question.title })).not.toBeInTheDocument()
+})
+
 it('renders a long title and HTML-looking text as plain question titles', async () => {
   const title = ('<script>alert("title")</script> ' + '긴 질문 제목 '.repeat(20)).trimEnd()
-  server.use(http.get(endpoint, () => HttpResponse.json([{ id: 1, title }])))
+  server.use(http.get(endpoint, () => HttpResponse.json([{ id: 1, title, categories: [] }])))
   renderAdmin()
   const link = await screen.findByRole('link', { name: title })
   expect(link.textContent).toBe(title)

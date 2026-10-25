@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import {
-  Alert, Button, CircularProgress, List, ListItem, ListItemButton,
+  Alert, Button, Chip, CircularProgress, List, ListItem, ListItemButton,
   ListItemText, Stack, Typography,
 } from '@mui/material'
 import { Link as RouterLink } from 'react-router'
 import { getApiError } from '../api/client'
 import { getAdminQuestions } from '../api/adminQuestions'
-import type { ApiError, QuestionSummary } from '../api/types'
+import type { ApiError, QuestionCategory, QuestionSummary } from '../api/types'
 import ContentCard from '../components/ContentCard'
 import PageHeader from '../components/PageHeader'
+import QuestionCategories from '../components/QuestionCategories'
+import QuestionCategoryFilter from '../components/QuestionCategoryFilter'
 
 function AdminQuestionListPage() {
   const [state, setState] = useState<{
@@ -17,6 +19,10 @@ function AdminQuestionListPage() {
     error: ApiError | null
   }>({ questions: [], isLoading: true, error: null })
   const [reloadCount, setReloadCount] = useState(0)
+  const [category, setCategory] = useState<QuestionCategory | 'ALL'>('ALL')
+  const visibleQuestions = category === 'ALL'
+    ? state.questions
+    : state.questions.filter((question) => question.categories.includes(category))
 
   useEffect(() => {
     const controller = new AbortController()
@@ -52,7 +58,11 @@ function AdminQuestionListPage() {
           새 질문 만들기
         </Button>} />
       <ContentCard component="section" aria-labelledby="admin-question-list-title"><Stack spacing={2}>
-        <Typography component="h2" variant="h5" id="admin-question-list-title">관리자 질문 목록</Typography>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography component="h2" variant="h5" id="admin-question-list-title">관리자 질문 목록</Typography>
+          {!state.isLoading && !state.error && <Chip size="small" variant="outlined" label={`${visibleQuestions.length}개 질문`} />}
+        </Stack>
+        <QuestionCategoryFilter value={category} onChange={setCategory} />
         {state.isLoading ? (
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }} role="status">
             <CircularProgress size={24} aria-label="관리자 질문 목록 조회 중" />
@@ -69,12 +79,17 @@ function AdminQuestionListPage() {
           </Stack>
         ) : state.questions.length === 0 ? (
           <Typography role="status" color="text.secondary">아직 등록된 질문이 없습니다.</Typography>
+        ) : visibleQuestions.length === 0 ? (
+          <Typography role="status" color="text.secondary">선택한 카테고리에 해당하는 질문이 없습니다.</Typography>
         ) : (
           <List disablePadding aria-labelledby="admin-question-list-title">
-            {state.questions.map((question) => (
+            {visibleQuestions.map((question) => (
               <ListItem key={question.id} disablePadding divider>
-                <ListItemButton component={RouterLink} to={`/admin/questions/${question.id}/edit`} sx={{ py: 2 }}>
-                  <ListItemText primary={question.title} slotProps={{ primary: { sx: { fontWeight: 600 } } }} />
+                <ListItemButton component={RouterLink} to={`/admin/questions/${question.id}/edit`} aria-label={question.title} sx={{ py: 2 }}>
+                  <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                    <ListItemText primary={question.title} slotProps={{ primary: { sx: { fontWeight: 600 } } }} />
+                    <QuestionCategories categories={question.categories} />
+                  </Stack>
                 </ListItemButton>
               </ListItem>
             ))}

@@ -16,7 +16,7 @@ afterEach(clearAdminSession)
 const endpoint = 'http://api.test/api/admin/questions'
 const csrfConfig = { headers: { 'X-CSRF-TOKEN': csrfToken.token } }
 const request: AdminQuestionRequest = {
-  title: '  인덱스 제목  ', content: '  인덱스를 설명해주세요.\n둘째 줄  ',
+  title: '  인덱스 제목  ', content: '  인덱스를 설명해주세요.\n둘째 줄  ', categories: [],
   criteria: [{ content: '  조회 이점을 설명한다.  ', maxScore: 100, displayOrder: 1 }],
 }
 const detail: AdminQuestionDetail = { ...request, id: 9, criteria: [{ ...request.criteria[0], id: 91 }] }
@@ -94,7 +94,7 @@ function mockDetail(value = detail) {
 }
 
 function mockList() {
-  server.use(http.get(endpoint, () => HttpResponse.json([{ id: 9, title: '인덱스' }])))
+  server.use(http.get(endpoint, () => HttpResponse.json([{ id: 9, title: '인덱스', categories: [] }])))
 }
 
 it('starts with blank fields, one 100-point criterion, UTF-16 limits, and separate save/preview buttons', async () => {
@@ -115,6 +115,9 @@ it('starts with blank fields, one 100-point criterion, UTF-16 limits, and separa
   expect(screen.getByRole('button', { name: '기준 1 아래로' })).toBeDisabled()
   expect(screen.getByRole('button', { name: '저장' })).toHaveAttribute('type', 'submit')
   expect(screen.getByRole('button', { name: '답변 테스트' })).toHaveAttribute('type', 'button')
+  expect(screen.getByRole('group', { name: '카테고리 (선택)' })).toBeInTheDocument()
+  expect(screen.getByRole('checkbox', { name: '프론트엔드' })).not.toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '백엔드' })).not.toBeChecked()
   expect(get.mock.calls.length).toBeGreaterThan(0)
   expect(get.mock.calls.every(([path]) => path === '/api/auth/me')).toBe(true)
   expect(post).not.toHaveBeenCalled()
@@ -280,6 +283,115 @@ it('saves without a preview or answer, uses returned detail as baseline, and sta
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
+it('saves both independent categories in canonical order even when backend is selected first', async () => {
+  const received = vi.fn()
+  server.use(http.post(endpoint, async ({ request: incoming }) => {
+    received(await incoming.json())
+    return HttpResponse.json({ ...detail, categories: ['FRONTEND', 'BACKEND'] }, { status: 201 })
+  }))
+  renderEditor()
+  const user = await fillNew()
+  await user.click(screen.getByRole('checkbox', { name: '백엔드' }))
+  await user.click(screen.getByRole('checkbox', { name: '프론트엔드' }))
+  await user.click(screen.getByRole('button', { name: '저장' }))
+  await screen.findByText('질문이 저장되었습니다.')
+  expect(received).toHaveBeenCalledExactlyOnceWith({ ...request, categories: ['FRONTEND', 'BACKEND'] })
+  expect(screen.getByRole('checkbox', { name: '프론트엔드' })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '백엔드' })).toBeChecked()
+})
+
+it.each(['clear', 'change'] as const)('initializes existing categories and saves an explicit array on %s', async (action) => {
+  mockDetail({ ...detail, categories: ['FRONTEND'] })
+  const received = vi.fn()
+  server.use(http.put(`${endpoint}/9`, async ({ request: incoming }) => {
+    received(await incoming.json())
+    return HttpResponse.json({ ...detail, categories: action === 'clear' ? [] : ['BACKEND'] })
+  }))
+  renderEditor('/admin/questions/9/edit')
+  const frontend = await screen.findByRole('checkbox', { name: '프론트엔드' })
+  expect(frontend).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '백엔드' })).not.toBeChecked()
+  const user = userEvent.setup()
+  await user.click(frontend)
+  if (action === 'change') await user.click(screen.getByRole('checkbox', { name: '백엔드' }))
+  await user.click(screen.getByRole('button', { name: '저장' }))
+  await screen.findByText('질문이 저장되었습니다.')
+  expect(received).toHaveBeenCalledExactlyOnceWith({ ...request, categories: action === 'clear' ? [] : ['BACKEND'] })
+})
+
+it('tracks category-only dirty changes and reverts without category order false positives', async () => {
+  mockDetail({ ...detail, categories: ['BACKEND', 'FRONTEND'] })
+  mockList()
+  renderEditor('/admin/questions/9/edit')
+  const frontend = await screen.findByRole('checkbox', { name: '프론트엔드' })
+  const user = userEvent.setup()
+  const beforeUnload = () => {
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    return event.defaultPrevented
+  }
+  expect(beforeUnload()).toBe(false)
+  await user.click(frontend)
+  expect(beforeUnload()).toBe(true)
+  await user.click(screen.getByRole('link', { name: '관리자 질문 목록으로' }))
+  const dialog = await screen.findByRole('dialog', { name: '입력을 버리고 이동할까요?' })
+  await user.click(within(dialog).getByRole('button', { name: '계속 편집' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  await user.click(frontend)
+  expect(beforeUnload()).toBe(false)
+  await user.click(screen.getByRole('link', { name: '관리자 질문 목록으로' }))
+  expect(await screen.findByRole('list', { name: '관리자 질문 목록' })).toBeInTheDocument()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+it('uses server-normalized categories for state and the saved baseline, then clears success on category edits', async () => {
+  mockDetail()
+  const put = vi.spyOn(apiClient, 'put')
+  server.use(http.put(`${endpoint}/9`, () => HttpResponse.json({ ...detail, categories: ['BACKEND'] })))
+  renderEditor('/admin/questions/9/edit')
+  const frontend = await screen.findByRole('checkbox', { name: '프론트엔드' })
+  const user = userEvent.setup()
+  await user.click(frontend)
+  await user.click(screen.getByRole('button', { name: '저장' }))
+  await screen.findByText('질문이 저장되었습니다.')
+  expect(put).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/9', { ...request, categories: ['FRONTEND'] }, csrfConfig)
+  expect(frontend).not.toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '백엔드' })).toBeChecked()
+  const clean = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(clean)
+  expect(clean.defaultPrevented).toBe(false)
+  await user.click(frontend)
+  expect(screen.queryByText('질문이 저장되었습니다.')).not.toBeInTheDocument()
+  const dirty = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(dirty)
+  expect(dirty.defaultPrevented).toBe(true)
+  await user.click(frontend)
+  const reverted = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(reverted)
+  expect(reverted.defaultPrevented).toBe(false)
+})
+
+it('omits categories from the preview HTTP body and retains its result across category-only changes', async () => {
+  mockDetail({ ...detail, categories: ['FRONTEND', 'BACKEND'] })
+  const received = vi.fn()
+  server.use(http.post(`${endpoint}/evaluation-preview`, async ({ request: incoming }) => {
+    received(await incoming.json())
+    return HttpResponse.json(preview)
+  }))
+  renderEditor('/admin/questions/9/edit')
+  const user = userEvent.setup()
+  await enterTestAnswer(user)
+  await user.click(screen.getByRole('button', { name: '답변 테스트' }))
+  await screen.findByRole('heading', { name: '테스트 결과' })
+  expect(received).toHaveBeenCalledExactlyOnceWith({ title: request.title, content: request.content, criteria: request.criteria, answer })
+  for (const label of ['프론트엔드', '백엔드', '백엔드', '프론트엔드']) {
+    await user.click(screen.getByRole('checkbox', { name: label }))
+    expect(screen.getByRole('heading', { name: '테스트 결과' })).toBeInTheDocument()
+    expect(screen.getByText('총점: 82 / 100점')).toBeInTheDocument()
+  }
+  expect(received).toHaveBeenCalledTimes(1)
+})
+
 it.each(['post', 'put'] as const)('locks all editor operations for pending %s, rejects immediate double submit, and adds no transport timeout', async (method) => {
   const pending = pendingRequest(method, method === 'post' ? endpoint : `${endpoint}/9`)
   const spy = vi.spyOn(apiClient, method)
@@ -288,12 +400,21 @@ it.each(['post', 'put'] as const)('locks all editor operations for pending %s, r
   renderEditor(method === 'post' ? '/admin/questions/new' : '/admin/questions/9/edit')
   if (method === 'post') await fillNew()
   else await screen.findByRole('textbox', { name: '질문 제목' })
+  await userEvent.setup().click(screen.getByRole('checkbox', { name: '백엔드' }))
   try {
-    await act(async () => { fireEvent.submit(form()); fireEvent.submit(form()); await pending.started })
+    await act(async () => {
+      fireEvent.submit(form())
+      fireEvent.click(screen.getByRole('checkbox', { name: '프론트엔드' }))
+      fireEvent.submit(form())
+      await pending.started
+    })
     expect(spy).toHaveBeenCalledTimes(1)
     expect(spy.mock.calls[0]).toHaveLength(3)
     expect(spy.mock.calls[0][2]).toEqual(csrfConfig)
-    expect(pending.received).toHaveBeenCalledExactlyOnceWith(request)
+    expect(pending.received).toHaveBeenCalledExactlyOnceWith({ ...request, categories: ['BACKEND'] })
+    expect(screen.getByRole('checkbox', { name: '프론트엔드' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '백엔드' })).toBeChecked()
+    for (const label of ['프론트엔드', '백엔드']) expect(screen.getByRole('checkbox', { name: label })).toBeDisabled()
     for (const label of ['질문 제목', '질문 본문', '기준 설명 1', '최대 배점 1', '순서 1', '테스트 답변']) expect(screen.getByLabelText(label)).toBeDisabled()
     for (const label of ['저장', '답변 테스트', '기준 추가']) expect(screen.getByRole('button', { name: label })).toBeDisabled()
     expect(apiClient.defaults.timeout).toBe(0)
@@ -313,6 +434,7 @@ it.each([400, 404, 413, 500, 'network'] as const)('preserves edit inputs and dir
   const title = await screen.findByRole('textbox', { name: '질문 제목' })
   const user = userEvent.setup()
   await user.type(title, ' 변경')
+  await user.click(screen.getByRole('checkbox', { name: '백엔드' }))
   await enterTestAnswer(user)
   const before = get.mock.calls.length
   await user.click(screen.getByRole('button', { name: '저장' }))
@@ -320,6 +442,9 @@ it.each([400, 404, 413, 500, 'network'] as const)('preserves edit inputs and dir
   expect(title).toHaveValue(request.title + ' 변경')
   expect(screen.getByRole('textbox', { name: '질문 본문' })).toHaveValue(request.content)
   expect(screen.getByRole('textbox', { name: '테스트 답변' })).toHaveValue(answer)
+  expect(screen.getByRole('checkbox', { name: '백엔드' })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '백엔드' })).toBeEnabled()
+  expect(put).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/9', { ...request, title: request.title + ' 변경', categories: ['BACKEND'] }, csrfConfig)
   expect(screen.getByRole('button', { name: '저장' })).toBeEnabled()
   expect(screen.getByRole('button', { name: '답변 테스트' })).toBeEnabled()
   expect(put).toHaveBeenCalledTimes(1)
@@ -345,7 +470,9 @@ it('previews unsaved current form without DB IDs or save calls and displays outc
   expect(screen.getByRole('textbox', { name: '테스트 답변' })).toHaveValue(answer)
   expect(screen.getByText('총점: 82 / 100점')).toBeInTheDocument()
   for (const text of ['PASS', preview.strengths, preview.weaknesses, preview.improvements]) expect(screen.getByText(text)).toBeInTheDocument()
-  expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/evaluation-preview', { ...request, title: request.title + ' 변경', answer }, csrfConfig)
+  expect(post).toHaveBeenCalledExactlyOnceWith('/api/admin/questions/evaluation-preview', {
+    title: request.title + ' 변경', content: request.content, criteria: request.criteria, answer,
+  }, csrfConfig)
   expect(put).not.toHaveBeenCalled()
   expect(router.state.location.pathname).toBe('/admin/questions/9/edit')
 })
@@ -407,17 +534,19 @@ it.each([400, 413, 502, 500, 'network'] as const)('preserves all inputs after pr
   )
   renderEditor()
   const user = await fillNew()
+  await user.click(screen.getByRole('checkbox', { name: '프론트엔드' }))
   await enterTestAnswer(user)
   await user.click(screen.getByRole('button', { name: '답변 테스트' }))
   expect(await screen.findByRole('alert')).not.toHaveTextContent('private_proxy_error')
   expect(screen.getByRole('textbox', { name: '질문 제목' })).toHaveValue(request.title)
   expect(screen.getByRole('textbox', { name: '테스트 답변' })).toHaveValue(answer)
+  expect(screen.getByRole('checkbox', { name: '프론트엔드' })).toBeChecked()
   expect(screen.getByRole('button', { name: '저장' })).toBeEnabled()
   expect(screen.getByRole('button', { name: '답변 테스트' })).toBeEnabled()
   expect(post).toHaveBeenCalledTimes(1)
   await user.click(screen.getByRole('button', { name: '저장' }))
   await waitFor(() => expect(screen.getByRole('button', { name: '저장' })).toBeEnabled())
-  expect(post).toHaveBeenNthCalledWith(2, '/api/admin/questions', request, csrfConfig)
+  expect(post).toHaveBeenNthCalledWith(2, '/api/admin/questions', { ...request, categories: ['FRONTEND'] }, csrfConfig)
   expect(post).toHaveBeenCalledTimes(2)
 })
 
@@ -428,11 +557,13 @@ it.each(['success', 'error'] as const)('expires preview at 180000ms without abor
   server.use(first.handler)
   renderEditor()
   const user = await fillNew()
+  await user.click(screen.getByRole('checkbox', { name: '백엔드' }))
   await enterTestAnswer(user)
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   try {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '답변 테스트' }))
+      fireEvent.click(screen.getByRole('checkbox', { name: '프론트엔드' }))
       fireEvent.click(screen.getByRole('button', { name: '답변 테스트' }))
       fireEvent.submit(form())
       await first.started
@@ -440,6 +571,10 @@ it.each(['success', 'error'] as const)('expires preview at 180000ms without abor
     expect(post).toHaveBeenCalledTimes(1)
     expect(post.mock.calls[0]).toHaveLength(3)
     expect(post.mock.calls[0][2]).toEqual(csrfConfig)
+    expect(first.received).toHaveBeenCalledExactlyOnceWith({ title: request.title, content: request.content, criteria: request.criteria, answer })
+    expect(screen.getByRole('checkbox', { name: '프론트엔드' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '백엔드' })).toBeChecked()
+    for (const label of ['프론트엔드', '백엔드']) expect(screen.getByRole('checkbox', { name: label })).toBeDisabled()
     await act(async () => { await vi.advanceTimersByTimeAsync(179999) })
     for (const label of ['질문 제목', '질문 본문', '기준 설명 1', '최대 배점 1', '순서 1', '테스트 답변']) expect(screen.getByLabelText(label)).toBeDisabled()
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled()
@@ -448,6 +583,8 @@ it.each(['success', 'error'] as const)('expires preview at 180000ms without abor
     expect(first.signal.aborted).toBe(false)
     for (const label of ['질문 제목', '질문 본문', '기준 설명 1', '최대 배점 1', '순서 1', '테스트 답변']) expect(screen.getByLabelText(label)).toBeEnabled()
     for (const label of ['저장', '답변 테스트', '기준 추가']) expect(screen.getByRole('button', { name: label })).toBeEnabled()
+    for (const label of ['프론트엔드', '백엔드']) expect(screen.getByRole('checkbox', { name: label })).toBeEnabled()
+    expect(screen.getByRole('checkbox', { name: '백엔드' })).toBeChecked()
     expect(screen.getByRole('textbox', { name: '테스트 답변' })).toHaveValue(answer)
     expect(post).toHaveBeenCalledTimes(1)
     server.use(second.handler)

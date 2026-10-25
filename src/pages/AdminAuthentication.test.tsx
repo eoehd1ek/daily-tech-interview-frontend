@@ -11,13 +11,13 @@ import { adminUser, csrfToken, setupAdminAuth } from '../test/adminAuth'
 import { server } from '../test/server'
 
 const origin = 'http://api.test'
-const detail = { id: 9, title: '인덱스', content: '인덱스를 설명해주세요.', criteria: [{ id: 91, content: '조회 이점', maxScore: 100, displayOrder: 1 }] }
+const detail = { id: 9, title: '인덱스', content: '인덱스를 설명해주세요.', categories: [], criteria: [{ id: 91, content: '조회 이점', maxScore: 100, displayOrder: 1 }] }
 
 beforeEach(() => {
   setupAdminAuth()
   server.use(
-    http.get(`${origin}/api/questions`, () => HttpResponse.json([{ id: 9, title: detail.title }])),
-    http.get(`${origin}/api/admin/questions`, () => HttpResponse.json([{ id: 9, title: detail.title }])),
+    http.get(`${origin}/api/questions`, () => HttpResponse.json([{ id: 9, title: detail.title, categories: [] }])),
+    http.get(`${origin}/api/admin/questions`, () => HttpResponse.json([{ id: 9, title: detail.title, categories: [] }])),
     http.get(`${origin}/api/admin/questions/9`, () => HttpResponse.json(detail)),
   )
 })
@@ -176,7 +176,7 @@ it('reauthenticates an expired save while preserving all inputs and requiring a 
   server.use(
     http.put(`${origin}/api/admin/questions/9`, async ({ request }) => {
       saves(await request.json())
-      return expired ? authFailure(401, 'AUTHENTICATION_REQUIRED') : HttpResponse.json({ ...detail, title: 'edited title' })
+      return expired ? authFailure(401, 'AUTHENTICATION_REQUIRED') : HttpResponse.json({ ...detail, title: 'edited title', categories: ['FRONTEND', 'BACKEND'] })
     }),
     http.post(`${origin}/api/auth/login`, () => { expired = false; return HttpResponse.json(adminUser) }),
   )
@@ -185,6 +185,8 @@ it('reauthenticates an expired save while preserving all inputs and requiring a 
   const user = userEvent.setup()
   await user.clear(title)
   await user.type(title, 'edited title')
+  await user.click(screen.getByRole('checkbox', { name: '백엔드' }))
+  await user.click(screen.getByRole('checkbox', { name: '프론트엔드' }))
   await user.type(screen.getByRole('textbox', { name: '테스트 답변' }), 'retained answer')
   await user.click(screen.getByRole('button', { name: '저장' }))
   const dialog = await screen.findByRole('dialog', { name: '세션이 만료되었습니다' })
@@ -195,10 +197,16 @@ it('reauthenticates an expired save while preserving all inputs and requiring a 
   expect(screen.getByRole('textbox', { name: '질문 본문' })).toHaveValue(detail.content)
   expect(screen.getByRole('textbox', { name: '기준 설명 1' })).toHaveValue(detail.criteria[0].content)
   expect(screen.getByRole('textbox', { name: '테스트 답변' })).toHaveValue('retained answer')
+  for (const label of ['프론트엔드', '백엔드']) expect(screen.getByRole('checkbox', { name: label })).toBeChecked()
+  expect(saves).toHaveBeenCalledExactlyOnceWith({
+    title: 'edited title', content: detail.content, categories: ['FRONTEND', 'BACKEND'],
+    criteria: [{ content: detail.criteria[0].content, maxScore: 100, displayOrder: 1 }],
+  })
   expect(saves).toHaveBeenCalledTimes(1)
   await user.click(screen.getByRole('button', { name: '저장' }))
   expect(await screen.findByText('질문이 저장되었습니다.')).toBeInTheDocument()
   expect(saves).toHaveBeenCalledTimes(2)
+  expect(saves.mock.calls[1]).toEqual(saves.mock.calls[0])
 })
 
 it('refreshes invalid CSRF only on manual retry without logging out or discarding the form', async () => {
@@ -291,6 +299,7 @@ it('retains the preview answer and never replays a paid preview after reauthenti
   renderPage('/admin/questions/9/edit')
   await screen.findByRole('textbox', { name: '질문 제목' })
   const user = userEvent.setup()
+  await user.click(screen.getByRole('checkbox', { name: '백엔드' }))
   await user.type(screen.getByRole('textbox', { name: '테스트 답변' }), 'answer to retain')
   await user.click(screen.getByRole('button', { name: '답변 테스트' }))
   const dialog = await screen.findByRole('dialog', { name: '세션이 만료되었습니다' })
@@ -298,6 +307,8 @@ it('retains the preview answer and never replays a paid preview after reauthenti
   await user.click(within(dialog).getByRole('button', { name: '로그인' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   expect(screen.getByRole('textbox', { name: '테스트 답변' })).toHaveValue('answer to retain')
+  expect(screen.getByRole('checkbox', { name: '백엔드' })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '프론트엔드' })).not.toBeChecked()
   expect(screen.getByRole('button', { name: '답변 테스트' })).toBeEnabled()
   expect(previews).toHaveBeenCalledTimes(1)
 })

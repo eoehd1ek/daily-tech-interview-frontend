@@ -6,9 +6,11 @@ import {
 import { Link as RouterLink } from 'react-router'
 import { getApiError } from '../api/client'
 import { getQuestions } from '../api/questions'
-import type { ApiError, QuestionSummary } from '../api/types'
+import type { ApiError, QuestionCategory, QuestionSummary } from '../api/types'
 import ContentCard from '../components/ContentCard'
 import PageHeader from '../components/PageHeader'
+import QuestionCategories from '../components/QuestionCategories'
+import QuestionCategoryFilter from '../components/QuestionCategoryFilter'
 
 function HomePage() {
   const [state, setState] = useState<{
@@ -17,6 +19,10 @@ function HomePage() {
     error: ApiError | null
   }>({ questions: [], isLoading: true, error: null })
   const [reloadCount, setReloadCount] = useState(0)
+  const [category, setCategory] = useState<QuestionCategory | 'ALL'>('ALL')
+  const visibleQuestions = category === 'ALL'
+    ? state.questions
+    : state.questions.filter((question) => question.categories.includes(category))
 
   useEffect(() => {
     const controller = new AbortController()
@@ -66,8 +72,9 @@ function HomePage() {
         <Typography component="h2" variant="h5" id="question-list-title">
           질문 목록
         </Typography>
-        {!state.isLoading && !state.error && <Chip size="small" variant="outlined" label={`${state.questions.length}개 질문`} />}
+        {!state.isLoading && !state.error && <Chip size="small" variant="outlined" label={`${visibleQuestions.length}개 질문`} />}
         </Stack>
+        <QuestionCategoryFilter value={category} onChange={setCategory} />
         {state.isLoading ? (
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }} role="status">
             <CircularProgress size={24} aria-label="질문 목록 조회 중" />
@@ -88,13 +95,20 @@ function HomePage() {
           <Typography role="status" color="text.secondary">
             아직 등록된 질문이 없습니다.
           </Typography>
+        ) : visibleQuestions.length === 0 ? (
+          <Typography role="status" color="text.secondary">
+            선택한 카테고리에 해당하는 질문이 없습니다.
+          </Typography>
         ) : (
           <List disablePadding aria-labelledby="question-list-title">
-            {state.questions.map((question, index) => (
+            {visibleQuestions.map((question, index) => (
               <ListItem key={question.id} disablePadding divider>
-                <ListItemButton component={RouterLink} to={`/questions/${question.id}`} sx={{ py: 2, gap: 2 }}>
+                <ListItemButton component={RouterLink} to={`/questions/${question.id}`} aria-label={question.title} sx={{ py: 2, gap: 2 }}>
                   <Typography aria-hidden variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', minWidth: 24 }}>{String(index + 1).padStart(2, '0')}</Typography>
-                  <ListItemText primary={question.title} slotProps={{ primary: { sx: { fontWeight: 600 } } }} />
+                  <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                    <ListItemText primary={question.title} slotProps={{ primary: { sx: { fontWeight: 600 } } }} />
+                    <QuestionCategories categories={question.categories} />
+                  </Stack>
                   <Box component="span" aria-hidden sx={{ color: 'text.secondary' }}>&gt;</Box>
                 </ListItemButton>
               </ListItem>

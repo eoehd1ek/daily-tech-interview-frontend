@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import axios from 'axios'
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, Stack, TextField, Typography,
+  Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions,
+  DialogContent, DialogTitle, FormControl, FormControlLabel, FormGroup, FormLabel, Stack, TextField, Typography,
 } from '@mui/material'
 import { Link as RouterLink, useBeforeUnload, useBlocker, useParams } from 'react-router'
 import { createAdminQuestion, getAdminQuestion, previewAdminQuestion, updateAdminQuestion } from '../api/adminQuestions'
 import { getApiError } from '../api/client'
 import { getEvaluationWaitTime } from '../api/evaluationAttempts'
-import type { AdminQuestionDetail, AdminQuestionRequest, EvaluationPreviewResult } from '../api/types'
+import { questionCategories } from '../api/questionCategories'
+import type { AdminQuestionDetail, AdminQuestionRequest, EvaluationPreviewResult, QuestionCategory } from '../api/types'
 import ContentCard from '../components/ContentCard'
 import PageHeader from '../components/PageHeader'
 
@@ -19,8 +20,12 @@ function ordered(criteria: Criterion[]) {
   return [...criteria].sort((a, b) => Number(a.displayOrder) - Number(b.displayOrder))
 }
 
-function requestOf(title: string, content: string, criteria: Criterion[]): AdminQuestionRequest {
-  return { title, content, criteria: ordered(criteria).map((criterion) => ({
+function canonicalCategories(categories: QuestionCategory[]) {
+  return questionCategories.map(({ code }) => code).filter((category) => categories.includes(category))
+}
+
+function requestOf(title: string, content: string, categories: QuestionCategory[], criteria: Criterion[]): AdminQuestionRequest {
+  return { title, content, categories: canonicalCategories(categories), criteria: ordered(criteria).map((criterion) => ({
     content: criterion.content, maxScore: Number(criterion.maxScore), displayOrder: Number(criterion.displayOrder),
   })) }
 }
@@ -72,14 +77,15 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
   const [questionId, setQuestionId] = useState(initial?.id ?? null)
   const [title, setTitle] = useState(initial?.title ?? '')
   const [content, setContent] = useState(initial?.content ?? '')
+  const [categories, setCategories] = useState<QuestionCategory[]>(() => canonicalCategories(initial?.categories ?? []))
   const [criteria, setCriteria] = useState<Criterion[]>(() => initial ? source.map((criterion, index) => ({
     key: index, content: criterion.content, maxScore: String(criterion.maxScore),
     displayOrder: String(renumbered ? index + 1 : criterion.displayOrder),
   })) : [{ key: 0, content: '', maxScore: '100', displayOrder: '1' }])
   const nextKey = useRef(criteria.length)
   const [baseline, setBaseline] = useState(() => JSON.stringify(initial
-    ? { title: initial.title, content: initial.content, criteria: source.map(({ content, maxScore, displayOrder }) => ({ content, maxScore, displayOrder })) }
-    : requestOf('', '', criteria)))
+    ? { title: initial.title, content: initial.content, categories: canonicalCategories(initial.categories), criteria: source.map(({ content, maxScore, displayOrder }) => ({ content, maxScore, displayOrder })) }
+    : requestOf('', '', [], criteria)))
   const [answer, setAnswer] = useState('')
   const [validated, setValidated] = useState(false)
   const [previewValidated, setPreviewValidated] = useState(false)
@@ -91,7 +97,7 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
   const [normalizationNotice, setNormalizationNotice] = useState(renumbered)
   const operation = useRef<{ timer?: number } | null>(null)
   const dragged = useRef<number | null>(null)
-  const request = requestOf(title, content, criteria)
+  const request = requestOf(title, content, categories, criteria)
   const dirty = JSON.stringify(request) !== baseline
   const protect = dirty || answer.length > 0 || busy !== null
   const blocker = useBlocker(protect)
@@ -162,9 +168,10 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
       setQuestionId(detail.id)
       setTitle(detail.title)
       setContent(detail.content)
+      setCategories(canonicalCategories(detail.categories))
       setCriteria(sorted.map((criterion) => ({ key: nextKey.current++, content: criterion.content,
         maxScore: String(criterion.maxScore), displayOrder: String(criterion.displayOrder) })))
-      setBaseline(JSON.stringify({ title: detail.title, content: detail.content,
+      setBaseline(JSON.stringify({ title: detail.title, content: detail.content, categories: canonicalCategories(detail.categories),
         criteria: sorted.map(({ content, maxScore, displayOrder }) => ({ content, maxScore, displayOrder })) }))
       setNormalizationNotice(false)
       setResult(null)
@@ -195,7 +202,7 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
     }, waitTime)
     setBusy('preview')
     try {
-      const evaluation = await previewAdminQuestion({ ...request, answer })
+      const evaluation = await previewAdminQuestion({ title: request.title, content: request.content, criteria: request.criteria, answer })
       if (operation.current === current) setResult(evaluation)
     } catch (failure) {
       if (operation.current === current) setPreviewError(failureMessage(failure, true))
@@ -221,6 +228,19 @@ function QuestionEditor({ initial }: { initial: AdminQuestionDetail | null }) {
           onChange={(event) => { changed(); setTitle(event.target.value) }} error={validated && titleInvalid}
           helperText={`${validated && titleInvalid ? '공백이 아닌 제목을 200자 이내로 작성해주세요. ' : ''}${title.length} / 200자`}
           slotProps={{ htmlInput: { maxLength: 200 } }} />
+        <FormControl component="fieldset" disabled={busy !== null}>
+          <FormLabel component="legend">카테고리 (선택)</FormLabel>
+          <FormGroup row>
+            {questionCategories.map(({ code: category, label }) => <FormControlLabel key={category}
+              label={label}
+              control={<Checkbox color={category === 'FRONTEND' ? 'info' : 'success'} checked={categories.includes(category)}
+                onChange={(_, checked) => {
+                  if (operation.current) return
+                  setSaved(false)
+                  setCategories((items) => canonicalCategories(checked ? [...items, category] : items.filter((item) => item !== category)))
+                }} />} />)}
+          </FormGroup>
+        </FormControl>
         <TextField label="질문 본문" value={content} disabled={busy !== null} fullWidth multiline minRows={5}
           onChange={(event) => { changed(); setContent(event.target.value) }} error={validated && contentInvalid}
           helperText={`${validated && contentInvalid ? '공백이 아닌 본문을 10,000자 이내로 작성해주세요. ' : ''}${content.length} / 10000자`}

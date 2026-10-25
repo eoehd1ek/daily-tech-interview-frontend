@@ -5,6 +5,7 @@ import { Alert, Button, CircularProgress, Stack, TextField, Typography } from '@
 import { useNavigate, useParams } from 'react-router'
 import { getApiError } from '../api/client'
 import ContentCard from '../components/ContentCard'
+import QuestionCategories from '../components/QuestionCategories'
 import { getQuestion } from '../api/questions'
 import { getEvaluationWaitTime, submitEvaluationAttempt } from '../api/evaluationAttempts'
 import type { ApiError, QuestionDetail } from '../api/types'
@@ -175,6 +176,7 @@ function QuestionAnswerContent({ questionId }: { questionId: number }) {
         <Typography component="h1" variant="h4" id="question-title">
           {question.title}
         </Typography>
+        <QuestionCategories categories={question.categories} />
         <Typography sx={{ whiteSpace: 'pre-wrap' }}>{question.content}</Typography>
       </Stack></ContentCard>
       <ContentCard sx={{ flex: 1, width: { xs: '100%', md: 'auto' } }}><Stack component="form" onSubmit={submit} spacing={2} aria-labelledby="answer-title">

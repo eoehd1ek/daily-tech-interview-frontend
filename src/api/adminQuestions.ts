@@ -1,4 +1,5 @@
 import { adminClient, getCsrfToken } from './auth'
+import { isQuestionCategories, isQuestionSummary } from './questionCategories'
 import type {
   AdminQuestionDetail,
   AdminQuestionRequest,
@@ -8,7 +9,10 @@ import type {
 } from './types'
 
 export async function getAdminQuestions(signal?: AbortSignal): Promise<QuestionSummary[]> {
-  const response = await adminClient.get<QuestionSummary[]>('/api/admin/questions', { signal })
+  const response = await adminClient.get<unknown>('/api/admin/questions', { signal })
+  if (response.status !== 200 || !Array.isArray(response.data) || !response.data.every(isQuestionSummary)) {
+    throw new Error('질문 목록 응답을 확인하지 못했습니다. 다시 조회해주세요.')
+  }
   return response.data
 }
 
@@ -63,7 +67,7 @@ function isSafeId(id: unknown): id is number {
 
 function isAdminQuestionDetail(data: unknown): data is AdminQuestionDetail {
   return isRecord(data) && isSafeId(data.id) && typeof data.title === 'string' &&
-    typeof data.content === 'string' && Array.isArray(data.criteria) &&
+    typeof data.content === 'string' && isQuestionCategories(data.categories) && Array.isArray(data.criteria) &&
     data.criteria.every((criterion: unknown) => isRecord(criterion) && isSafeId(criterion.id) &&
       typeof criterion.content === 'string' && Number.isInteger(criterion.maxScore) &&
       Number.isInteger(criterion.displayOrder))

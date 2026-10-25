@@ -1,15 +1,16 @@
 import { StrictMode } from 'react'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { Link, MemoryRouter, Route, Routes } from 'react-router'
 import { expect, it, vi } from 'vitest'
 import { server } from '../test/server'
 import { apiClient } from '../api/client'
+import type { QuestionDetail } from '../api/types'
 import QuestionAnswerPage from './QuestionAnswerPage'
 
 const endpoint = 'http://api.test/api/questions/:questionId'
-const question = { id: 1, title: '인덱스', content: '첫 줄\n둘째 줄 <script>text only</script>' }
+const question: QuestionDetail = { id: 1, title: '인덱스', content: '첫 줄\n둘째 줄 <script>text only</script>', categories: [] }
 
 function renderQuestion(id = '1') {
   return render(
@@ -61,6 +62,38 @@ it('shows loading, then displays the question as text and an accessible answer f
   expect(container.querySelector('script')).toBeNull()
   expect(input).toHaveAttribute('maxlength', '3000')
   expect(input).toHaveValue('')
+})
+
+it.each<{ categories: QuestionDetail['categories'] }>([
+  { categories: [] }, { categories: ['FRONTEND'] }, { categories: ['BACKEND'] },
+  { categories: ['FRONTEND', 'BACKEND'] },
+])(
+  'shows direct-detail category badges from the detail response $categories without fetching a list', async ({ categories }) => {
+    const get = vi.spyOn(apiClient, 'get')
+    server.use(http.get(endpoint, () => HttpResponse.json({ ...question, categories })))
+    renderQuestion()
+    const section = await screen.findByRole('region', { name: question.title })
+    expect(within(section).getByRole('heading', { name: question.title, level: 1 })).toBeInTheDocument()
+    for (const [code, label] of [['FRONTEND', '프론트엔드'], ['BACKEND', '백엔드']] as const) {
+      if (categories.includes(code)) expect(within(section).getByText(label)).toBeInTheDocument()
+      else expect(within(section).queryByText(label)).not.toBeInTheDocument()
+    }
+    expect(within(section).queryByText('미분류')).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '답변' })).toBeEnabled()
+    expect(get.mock.calls.length).toBeGreaterThan(0)
+    expect(get.mock.calls.every(([path]) => path === '/api/questions/1')).toBe(true)
+  },
+)
+
+it.each([
+  { id: question.id, title: question.title, content: question.content },
+  { ...question, categories: ['COMMON'] },
+])('does not enable answers for an invalid detail category response %j', async (response) => {
+  server.use(http.get(endpoint, () => HttpResponse.json(response)))
+  renderQuestion()
+  expect(await screen.findByRole('alert')).toHaveTextContent('연결 상태')
+  expect(screen.queryByRole('textbox', { name: '답변' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: question.title })).not.toBeInTheDocument()
 })
 
 it.each([
@@ -136,9 +169,9 @@ it('cancels the old lookup and ignores its response after changing question ID',
     if (params.questionId === '1') {
       started()
       await gate
-      return HttpResponse.json({ ...question, title: '이전 질문' })
+      return HttpResponse.json({ ...question, title: '이전 질문', categories: ['BACKEND'] })
     }
-    return HttpResponse.json({ ...question, id: 2, title: '새 질문' })
+    return HttpResponse.json({ ...question, id: 2, title: '새 질문', categories: ['FRONTEND'] })
   }))
   renderQuestion()
   try {
@@ -147,10 +180,14 @@ it('cancels the old lookup and ignores its response after changing question ID',
     expect(signals.some((signal) => signal && !signal.aborted)).toBe(true)
     await userEvent.setup().click(screen.getByRole('link', { name: '다른 질문' }))
     expect(await screen.findByRole('heading', { name: '새 질문' })).toBeInTheDocument()
+    expect(screen.getByText('프론트엔드')).toBeInTheDocument()
+    expect(screen.queryByText('백엔드')).not.toBeInTheDocument()
     expect(signals.every((signal) => signal?.aborted)).toBe(true)
     await act(async () => { release(); await gate })
     expect(screen.getByRole('heading', { name: '새 질문' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '이전 질문' })).not.toBeInTheDocument()
+    expect(screen.getByText('프론트엔드')).toBeInTheDocument()
+    expect(screen.queryByText('백엔드')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   } finally { release() }
 })

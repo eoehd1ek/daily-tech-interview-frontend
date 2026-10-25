@@ -10,15 +10,19 @@ export interface CsrfToken {
   token: string
 }
 
+export type QuestionCategory = 'FRONTEND' | 'BACKEND'
+
 export interface QuestionSummary {
   id: number
   title: string
+  categories: QuestionCategory[]
 }
 
 export interface QuestionDetail {
   id: number
   title: string
   content: string
+  categories: QuestionCategory[]
 }
 
 export interface AdminCriterionRequest {
@@ -35,6 +39,7 @@ export interface AdminQuestionRequest {
   title: string
   content: string
   criteria: AdminCriterionRequest[]
+  categories: QuestionCategory[]
 }
 
 export interface AdminQuestionDetail extends AdminQuestionRequest {
@@ -42,7 +47,7 @@ export interface AdminQuestionDetail extends AdminQuestionRequest {
   criteria: AdminCriterionDetail[]
 }
 
-export interface EvaluationPreviewRequest extends AdminQuestionRequest {
+export interface EvaluationPreviewRequest extends Omit<AdminQuestionRequest, 'categories'> {
   answer: string
 }
 
